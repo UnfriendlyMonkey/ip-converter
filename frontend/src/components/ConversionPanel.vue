@@ -8,19 +8,20 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
       span.cp-brand-name IP CONVERTER
 
     div.cp-header-right
-      button.cp-theme-btn(@click="toggleTheme" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'")
+      button.cp-lang-btn(@click="toggleLang" :title="t('switchLang')") {{ lang === 'en' ? 'RU' : 'EN' }}
+      button.cp-theme-btn(@click="toggleTheme" :title="darkMode ? t('toLight') : t('toDark')")
         | {{ darkMode ? '☀' : '☾' }}
       div.cp-dir-controls
         div.cp-dir-toggle
           button(
             :class="['cp-dir-opt', direction === 'to_numeric' && 'cp-dir-opt--active']"
             @click="setDirection('to_numeric')"
-          ) STRING → NUM
-          button.cp-dir-swap(@click="toggleDirection" title="Swap direction") ⇄
+          ) {{ t('strToNum') }}
+          button.cp-dir-swap(@click="toggleDirection" :title="t('swapDir')") ⇄
           button(
             :class="['cp-dir-opt', direction === 'to_string' && 'cp-dir-opt--active']"
             @click="setDirection('to_string')"
-          ) NUM → STRING
+          ) {{ t('numToStr') }}
 
   //- ── Panels ───────────────────────────────────────────────
   div.cp-panels
@@ -28,16 +29,16 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
     //- INPUT PANEL
     section.cp-panel.cp-panel--input
       div.cp-panel-header
-        span.cp-panel-title INPUT
+        span.cp-panel-title {{ t('input') }}
         div.cp-mode-toggle
           button(
             :class="['cp-tab', !multiMode && 'cp-tab--active']"
             @click="setMode(false)"
-          ) SINGLE
+          ) {{ t('single') }}
           button(
             :class="['cp-tab', multiMode && 'cp-tab--active']"
             @click="setMode(true)"
-          ) MULTI
+          ) {{ t('multi') }}
 
       div.cp-panel-body
         input.cp-input.cp-mono(
@@ -60,7 +61,7 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
         )
 
         div.cp-panel-footer
-          span.cp-hint {{ !multiMode ? 'converts live · type a valid IP' : 'one value per line · Ctrl+Enter to convert' }}
+          span.cp-hint {{ !multiMode ? t('hintSingle') : t('hintMulti') }}
           button.cp-action-btn(
             v-if="multiMode"
             :class="{ 'cp-action-btn--loading': loading }"
@@ -68,7 +69,7 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
             @click="convertMulti"
           )
             span.cp-blink(v-if="loading") ···
-            span(v-else) ⚡ CONVERT
+            span(v-else) ⚡ {{ t('convert') }}
 
     //- Divider arrow
     div.cp-arrow
@@ -77,28 +78,26 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
     //- OUTPUT PANEL
     section.cp-panel.cp-panel--output
       div.cp-panel-header
-        span.cp-panel-title OUTPUT
+        span.cp-panel-title {{ t('output') }}
         div.cp-output-controls
           template(v-if="multiMode")
             button(
               :class="['cp-tab', outputFormat === 'list' && 'cp-tab--active']"
               @click="outputFormat = 'list'"
-            ) LIST
+            ) {{ t('list') }}
             button(
               :class="['cp-tab', outputFormat === 'dict' && 'cp-tab--active']"
               @click="outputFormat = 'dict'"
-            ) DICT
+            ) {{ t('dict') }}
           button.cp-copy-btn(
             :class="{ 'cp-copy-btn--ok': justCopied }"
             :disabled="!outputText"
             @click="copyOutput"
-          ) {{ justCopied ? '✓ COPIED' : 'COPY' }}
+          ) {{ justCopied ? t('copied') : t('copy') }}
 
       div.cp-panel-body
         div.cp-output-state(v-if="loading")
-          span.cp-blink.cp-hint
-            | processing
-            span.cp-dots
+          span.cp-blink.cp-hint {{ t('processing') }}
 
         div.cp-output-state.cp-error-msg(v-else-if="apiError") {{ apiError }}
 
@@ -108,20 +107,85 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
         ) {{ outputText }}
 
         div.cp-output-state(v-else)
-          span.cp-hint // output will appear here
+          span.cp-hint {{ t('emptyOutput') }}
 
   //- ── Footer ───────────────────────────────────────────────
   footer.cp-footer
-    span.cp-hint ipv4 ints · ipv6 byte arrays · CIDR masks supported
+    span.cp-hint {{ t('footer') }}
 
   //- Copy toast
   transition(name="toast")
-    div.cp-toast(v-if="justCopied") Copied to clipboard!
+    div.cp-toast(v-if="justCopied") {{ t('toastCopied') }}
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { convertValues, type Direction, type ConversionResult } from '../api/converter'
+
+// ── i18n ────────────────────────────────────────────────────
+type Lang = 'en' | 'ru'
+
+const translations = {
+  en: {
+    strToNum:   'STRING → NUM',
+    numToStr:   'NUM → STRING',
+    swapDir:    'Swap direction',
+    toLight:    'Switch to light mode',
+    toDark:     'Switch to dark mode',
+    switchLang: 'Switch to Russian',
+    input:      'INPUT',
+    output:     'OUTPUT',
+    single:     'SINGLE',
+    multi:      'MULTI',
+    list:       'LIST',
+    dict:       'DICT',
+    copy:       'COPY',
+    copied:     '✓ COPIED',
+    convert:    'CONVERT',
+    processing: 'processing...',
+    hintSingle: 'converts live · type a valid IP',
+    hintMulti:  'one value per line · Ctrl+Enter to convert',
+    emptyOutput:'// output will appear here',
+    footer:     'ipv4 ints · ipv6 byte arrays · CIDR masks supported',
+    toastCopied:'Copied to clipboard!',
+  },
+  ru: {
+    strToNum:   'СТРОКА → ЧИСЛО',
+    numToStr:   'ЧИСЛО → СТРОКА',
+    swapDir:    'Сменить направление',
+    toLight:    'Светлая тема',
+    toDark:     'Тёмная тема',
+    switchLang: 'Switch to English',
+    input:      'ВВОД',
+    output:     'ВЫВОД',
+    single:     'ОДНО',
+    multi:      'МНОГО',
+    list:       'СПИСОК',
+    dict:       'СЛОВАРЬ',
+    copy:       'КОПИРОВАТЬ',
+    copied:     '✓ СКОПИРОВАНО',
+    convert:    'КОНВЕРТИРОВАТЬ',
+    processing: 'обработка...',
+    hintSingle: 'конвертирует автоматически · введите IP',
+    hintMulti:  'по одному значению в строке · Ctrl+Enter',
+    emptyOutput:'// результат появится здесь',
+    footer:     'ipv4 целые числа · ipv6 байт-массивы · маски CIDR',
+    toastCopied:'Скопировано!',
+  },
+} as const
+
+type TKey = keyof typeof translations.en
+
+const lang = ref<Lang>((localStorage.getItem('lang') as Lang) || 'en')
+
+function t(key: TKey): string {
+  return translations[lang.value][key]
+}
+
+function toggleLang() {
+  lang.value = lang.value === 'en' ? 'ru' : 'en'
+  localStorage.setItem('lang', lang.value)
+}
 
 // ── Theme ──────────────────────────────────────────────────
 const darkMode = ref(localStorage.getItem('theme') !== 'light')
@@ -167,7 +231,6 @@ const outputText = computed(() => {
       .join('\n')
   }
 
-  // dict format
   const dict: Record<string, string> = {}
   for (const r of results.value) {
     dict[r.input] = r.type === 'error' ? `ERROR: ${r.error}` : r.output
@@ -240,13 +303,6 @@ function setDirection(dir: Direction) {
   apiError.value = ''
 }
 
-// Re-run single conversion if direction changes while input has a value
-watch(direction, () => {
-  if (!multiMode.value && singleInput.value.trim()) {
-    debouncedSingle()
-  }
-})
-
 // ── Clipboard ──────────────────────────────────────────────
 async function copyOutput() {
   if (!outputText.value) return
@@ -255,7 +311,6 @@ async function copyOutput() {
     justCopied.value = true
     setTimeout(() => { justCopied.value = false }, 2000)
   } catch {
-    // fallback
     const ta = document.createElement('textarea')
     ta.value = outputText.value
     document.body.appendChild(ta)
@@ -326,6 +381,41 @@ async function copyOutput() {
   text-shadow: 0 0 20px rgba(0,255,136,0.4);
 }
 
+.cp-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Lang + Theme buttons ────────────────────────── */
+.cp-lang-btn,
+.cp-theme-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--green);
+  cursor: pointer;
+  transition: all 0.18s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.cp-lang-btn:hover,
+.cp-theme-btn:hover {
+  background: rgba(0,255,136,0.08);
+  box-shadow: 0 0 12px rgba(0,255,136,0.2);
+}
+
+/* ── Dir controls ────────────────────────────────── */
 .cp-dir-controls {
   display: flex;
   align-items: center;
@@ -669,35 +759,6 @@ async function copyOutput() {
 .toast-leave-to {
   opacity: 0;
   transform: translateY(8px);
-}
-
-/* ── Theme button ────────────────────────────────── */
-.cp-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.cp-theme-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--green);
-  cursor: pointer;
-  transition: all 0.18s;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.cp-theme-btn:hover {
-  background: rgba(0,255,136,0.08);
-  box-shadow: 0 0 12px rgba(0,255,136,0.2);
 }
 
 /* ── Light theme ─────────────────────────────────── */

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About · IP Converter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0a0a0f;
+      --surface:     #0d0d14;
+      --border:      rgba(0, 255, 136, 0.12);
+      --border-hi:   rgba(0, 255, 136, 0.35);
+      --green:       #00ff88;
+      --green-dim:   rgba(0, 255, 136, 0.6);
+      --text:        #8aa88a;
+      --text-bright: #ccffcc;
+      --text-dim:    #3a4a3a;
+      --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.8;
+      padding: 0 16px 48px;
+      min-height: 100vh;
+    }
+
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .brand-icon {
+      font-size: 22px;
+      color: var(--green);
+      filter: drop-shadow(0 0 6px var(--green));
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--green);
+      text-shadow: 0 0 20px rgba(0,255,136,0.4);
+    }
+
+    nav { display: flex; gap: 16px; }
+    nav a { font-size: 11px; letter-spacing: 0.1em; color: var(--text-dim); }
+    nav a:hover { color: var(--green); text-decoration: none; }
+
+    main { max-width: 760px; margin: 0 auto; }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: 0.1em;
+      text-shadow: 0 0 20px rgba(0,255,136,0.3);
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 12px;
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--green-dim);
+      margin: 36px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    p { margin-bottom: 14px; color: var(--text); }
+
+    ul, ol {
+      padding-left: 20px;
+      margin-bottom: 14px;
+    }
+
+    li { margin-bottom: 6px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+
+    .example-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .example-row:last-child { border-bottom: none; }
+
+    .ex-in  { color: var(--text-bright); flex: 1; }
+    .ex-arr { color: var(--text-dim); flex-shrink: 0; }
+    .ex-out { color: var(--green); flex: 1; text-align: right; }
+
+    .tag {
+      display: inline-block;
+      padding: 1px 7px;
+      font-size: 10px;
+      border: 1px solid var(--border-hi);
+      border-radius: 3px;
+      color: var(--green-dim);
+      letter-spacing: 0.08em;
+      margin: 2px 3px 2px 0;
+    }
+
+    footer {
+      margin-top: 60px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a class="brand" href="/">
+      <span class="brand-icon">⬡</span>
+      <span class="brand-name">IP CONVERTER</span>
+    </a>
+    <nav>
+      <a href="/">← Back to app</a>
+      <a href="/license.txt">License</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>About IP Converter</h1>
+    <p class="subtitle">A free, open-source tool for converting IP addresses between human-readable and numeric formats.</p>
+
+    <h2>WHAT IS THIS?</h2>
+    <p>
+      IP addresses are the fundamental identifiers of the internet — every device, server, and network
+      segment has one. But the same address can be represented in very different ways depending on
+      who (or what) is reading it.
+    </p>
+    <p>
+      Humans write <strong style="color:var(--text-bright)">192.168.1.1</strong> or
+      <strong style="color:var(--text-bright)">2001:db8::1/32</strong>.
+      Databases, routing tables, and low-level network code often store the exact same address as a
+      plain integer (<strong style="color:var(--green)">3232235777</strong>) or a raw byte array
+      (<strong style="color:var(--green)">[32,1,13,184,…]</strong>).
+      Converting between these forms by hand is tedious and error-prone.
+      IP Converter does it instantly.
+    </p>
+
+    <h2>WHO NEEDS THIS?</h2>
+    <ul>
+      <li><strong style="color:var(--text-bright)">Network engineers</strong> — cross-referencing ACLs, firewall rules, or routing tables stored as integers</li>
+      <li><strong style="color:var(--text-bright)">Backend developers</strong> — working with databases that store IPs as uint32 (MySQL, PostgreSQL, Redis)</li>
+      <li><strong style="color:var(--text-bright)">Security analysts</strong> — analysing logs, pcap files, or threat intelligence feeds with mixed formats</li>
+      <li><strong style="color:var(--text-bright)">DevOps / SRE</strong> — debugging infrastructure configs where IP format depends on the tool</li>
+      <li><strong style="color:var(--text-bright)">Students & learners</strong> — understanding how IP addresses actually work under the hood</li>
+    </ul>
+
+    <h2>CONVERSION EXAMPLES</h2>
+    <div class="card">
+      <div class="example-row">
+        <span class="ex-in">192.168.1.1</span>
+        <span class="ex-arr">→</span>
+        <span class="ex-out">3232235777</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-in">192.168.1.0/24</span>
+        <span class="ex-arr">→</span>
+        <span class="ex-out">3232235776/24</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-in">2001:db8::1</span>
+        <span class="ex-arr">→</span>
+        <span class="ex-out">[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,1]</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-in">2001:db8::/32</span>
+        <span class="ex-arr">→</span>
+        <span class="ex-out">[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,0]/32</span>
+      </div>
+    </div>
+    <p>All conversions work in reverse too — paste a number or byte array, get back a readable address.</p>
+
+    <h2>FEATURES</h2>
+    <ul>
+      <li><strong style="color:var(--text-bright)">Live conversion</strong> — results appear as you type, no button needed in single mode</li>
+      <li><strong style="color:var(--text-bright)">Bulk mode</strong> — paste a list of IPs (one per line) and convert them all at once</li>
+      <li><strong style="color:var(--text-bright)">Dict output</strong> — export results as a JSON key→value map for easy scripting</li>
+      <li><strong style="color:var(--text-bright)">One-click copy</strong> — copy the entire output to clipboard instantly</li>
+      <li><strong style="color:var(--text-bright)">IPv4 &amp; IPv6</strong> — full support for both protocols, including CIDR subnet notation</li>
+      <li><strong style="color:var(--text-bright)">Dark &amp; light themes</strong> — pick the one easier on your eyes</li>
+      <li><strong style="color:var(--text-bright)">No data leaves your browser</strong> — conversions happen on a local backend; nothing is logged or stored</li>
+    </ul>
+
+    <h2>SUPPORTED FORMATS</h2>
+    <p>
+      <span class="tag">IPv4 host</span>
+      <span class="tag">IPv4 CIDR</span>
+      <span class="tag">IPv6 host</span>
+      <span class="tag">IPv6 CIDR</span>
+      <span class="tag">uint32 (big-endian)</span>
+      <span class="tag">byte array (JSON)</span>
+      <span class="tag">mask as integer</span>
+    </p>
+
+    <h2>TECH STACK</h2>
+    <p>
+      Backend: <strong style="color:var(--text-bright)">Go 1.26</strong> — zero external dependencies, pure standard library.<br>
+      Frontend: <strong style="color:var(--text-bright)">Vue 3 + Vuetify + TypeScript + Pug</strong>.<br>
+      Deployment: <strong style="color:var(--text-bright)">Docker Compose</strong> — one command to run anywhere.
+    </p>
+
+    <h2>OPEN SOURCE</h2>
+    <p>
+      IP Converter is free and open source, released under the
+      <a href="/license.txt">MIT License</a>.
+      You are free to use, modify, and distribute it — including commercially —
+      as long as the original copyright notice is retained.
+    </p>
+  </main>
+
+  <footer>
+    <a href="/">IP Converter</a>
+    <a href="/about.html">About</a>
+    <a href="/license.txt">MIT License</a>
+  </footer>
+
+</body>
+</html>

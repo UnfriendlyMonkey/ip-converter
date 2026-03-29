@@ -112,6 +112,10 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
   //- ── Footer ───────────────────────────────────────────────
   footer.cp-footer
     span.cp-hint {{ t('footer') }}
+    div.cp-footer-links
+      a.cp-footer-link(href="/about.html" target="_blank") {{ t('about') }}
+      span.cp-footer-sep ·
+      a.cp-footer-link(href="/license.txt" target="_blank") {{ t('license') }}
 
   //- Copy toast
   transition(name="toast")
@@ -148,6 +152,8 @@ const translations = {
     emptyOutput:'// output will appear here',
     footer:     'ipv4 ints · ipv6 byte arrays · CIDR masks supported',
     toastCopied:'Copied to clipboard!',
+    about:      'About',
+    license:    'MIT License',
   },
   ru: {
     strToNum:   'СТРОКА → ЧИСЛО',
@@ -171,6 +177,8 @@ const translations = {
     emptyOutput:'// результат появится здесь',
     footer:     'ipv4 целые числа · ipv6 байт-массивы · маски CIDR',
     toastCopied:'Скопировано!',
+    about:      'О сервисе',
+    license:    'Лицензия MIT',
   },
 } as const
 
@@ -733,6 +741,33 @@ async function copyOutput() {
   text-align: center;
   border-top: 1px solid var(--border);
   margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-footer-link {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  transition: color 0.15s;
+}
+
+.cp-footer-link:hover {
+  color: var(--green);
+}
+
+.cp-footer-sep {
+  color: var(--text-dim);
+  font-size: 11px;
 }
 
 /* ── Toast ───────────────────────────────────────── */

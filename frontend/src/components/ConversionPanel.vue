@@ -23,64 +23,61 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
             @click="setDirection('to_string')"
           ) {{ t('numToStr') }}
 
-  //- ── Panels ───────────────────────────────────────────────
-  div.cp-panels
+  //- ── Hero single input ────────────────────────────────────
+  section.cp-hero
+    div.cp-hero-input-wrap
+      input.cp-hero-input.cp-mono(
+        v-model="heroInput"
+        :placeholder="singlePlaceholder"
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+        autocorrect="off"
+        @input="onHeroInput"
+      )
+      transition(name="toast")
+        span.cp-hero-copied(v-if="heroJustCopied") {{ t('copied') }}
+    div.cp-hero-output-wrap
+      pre.cp-hero-output.cp-mono(v-if="heroOutputText") {{ heroOutputText }}
+      span.cp-hint.cp-hero-hint(v-else-if="heroError" style="color: var(--error)") {{ heroError }}
+      span.cp-hint.cp-hero-hint(v-else) {{ t('hintSingle') }}
 
-    //- INPUT PANEL
-    section.cp-panel.cp-panel--input
-      div.cp-panel-header
-        span.cp-panel-title {{ t('input') }}
-        div.cp-mode-toggle
-          button(
-            :class="['cp-tab', !multiMode && 'cp-tab--active']"
-            @click="setMode(false)"
-          ) {{ t('single') }}
-          button(
-            :class="['cp-tab', multiMode && 'cp-tab--active']"
-            @click="setMode(true)"
-          ) {{ t('multi') }}
+  //- ── Multi / batch section ────────────────────────────────
+  div.cp-multi-section
+    div.cp-panels
 
-      div.cp-panel-body
-        input.cp-input.cp-mono(
-          v-if="!multiMode"
-          v-model="singleInput"
-          :placeholder="singlePlaceholder"
-          type="text"
-          spellcheck="false"
-          autocomplete="off"
-          autocorrect="off"
-          @input="onSingleInput"
-        )
+      //- INPUT PANEL
+      section.cp-panel.cp-panel--input
+        div.cp-panel-header
+          span.cp-panel-title {{ t('multi') }}
 
-        textarea.cp-textarea.cp-mono(
-          v-else
-          v-model="multiInput"
-          :placeholder="multiPlaceholder"
-          spellcheck="false"
-          @keydown.ctrl.enter="convertMulti"
-        )
-
-        div.cp-panel-footer
-          span.cp-hint {{ !multiMode ? t('hintSingle') : t('hintMulti') }}
-          button.cp-action-btn(
-            v-if="multiMode"
-            :class="{ 'cp-action-btn--loading': loading }"
-            :disabled="loading"
-            @click="convertMulti"
+        div.cp-panel-body
+          textarea.cp-textarea.cp-mono(
+            v-model="multiInput"
+            :placeholder="multiPlaceholder"
+            spellcheck="false"
+            @keydown.ctrl.enter="convertMulti"
           )
-            span.cp-blink(v-if="loading") ···
-            span(v-else) ⚡ {{ t('convert') }}
 
-    //- Divider arrow
-    div.cp-arrow
-      span ›
+          div.cp-panel-footer
+            span.cp-hint {{ t('hintMulti') }}
+            button.cp-action-btn(
+              :class="{ 'cp-action-btn--loading': loading }"
+              :disabled="loading"
+              @click="convertMulti"
+            )
+              span.cp-blink(v-if="loading") ···
+              span(v-else) ⚡ {{ t('convert') }}
 
-    //- OUTPUT PANEL
-    section.cp-panel.cp-panel--output
-      div.cp-panel-header
-        span.cp-panel-title {{ t('output') }}
-        div.cp-output-controls
-          template(v-if="multiMode")
+      //- Divider arrow
+      div.cp-arrow
+        span ›
+
+      //- OUTPUT PANEL
+      section.cp-panel.cp-panel--output
+        div.cp-panel-header
+          span.cp-panel-title {{ t('output') }}
+          div.cp-output-controls
             button(
               :class="['cp-tab', outputFormat === 'list' && 'cp-tab--active']"
               @click="outputFormat = 'list'"
@@ -89,25 +86,25 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
               :class="['cp-tab', outputFormat === 'dict' && 'cp-tab--active']"
               @click="outputFormat = 'dict'"
             ) {{ t('dict') }}
-          button.cp-copy-btn(
-            :class="{ 'cp-copy-btn--ok': justCopied }"
-            :disabled="!outputText"
-            @click="copyOutput"
-          ) {{ justCopied ? t('copied') : t('copy') }}
+            button.cp-copy-btn(
+              :class="{ 'cp-copy-btn--ok': justCopied }"
+              :disabled="!outputText"
+              @click="copyOutput"
+            ) {{ justCopied ? t('copied') : t('copy') }}
 
-      div.cp-panel-body
-        div.cp-output-state(v-if="loading")
-          span.cp-blink.cp-hint {{ t('processing') }}
+        div.cp-panel-body
+          div.cp-output-state(v-if="loading")
+            span.cp-blink.cp-hint {{ t('processing') }}
 
-        div.cp-output-state.cp-error-msg(v-else-if="apiError") {{ apiError }}
+          div.cp-output-state.cp-error-msg(v-else-if="apiError") {{ apiError }}
 
-        pre.cp-output.cp-mono(
-          v-else-if="outputText"
-          :class="{ 'cp-output--has-errors': hasErrors }"
-        ) {{ outputText }}
+          pre.cp-output.cp-mono(
+            v-else-if="outputText"
+            :class="{ 'cp-output--has-errors': hasErrors }"
+          ) {{ outputText }}
 
-        div.cp-output-state(v-else)
-          span.cp-hint {{ t('emptyOutput') }}
+          div.cp-output-state(v-else)
+            span.cp-hint {{ t('emptyOutput') }}
 
   //- ── Footer ───────────────────────────────────────────────
   footer.cp-footer
@@ -205,8 +202,14 @@ function toggleTheme() {
 
 // ── State ──────────────────────────────────────────────────
 const direction = ref<Direction>('to_numeric')
-const multiMode = ref(false)
-const singleInput = ref('')
+
+// Hero (single)
+const heroInput = ref('')
+const heroResult = ref<ConversionResult | null>(null)
+const heroError = ref('')
+const heroJustCopied = ref(false)
+
+// Multi / batch
 const multiInput = ref('')
 const outputFormat = ref<'list' | 'dict'>('list')
 const results = ref<ConversionResult[]>([])
@@ -227,13 +230,19 @@ const multiPlaceholder = computed(() =>
     : '3232235777\n3232235776/24\n[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,1]\n[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,0]/32'
 )
 
-// ── Output formatting ──────────────────────────────────────
+// ── Hero output ────────────────────────────────────────────
+const heroOutputText = computed(() => {
+  if (!heroResult.value || heroResult.value.type === 'error') return ''
+  return heroResult.value.output
+})
+
+// ── Multi output formatting ────────────────────────────────
 const hasErrors = computed(() => results.value.some(r => r.type === 'error'))
 
 const outputText = computed(() => {
   if (!results.value.length) return ''
 
-  if (!multiMode.value || outputFormat.value === 'list') {
+  if (outputFormat.value === 'list') {
     return results.value
       .map(r => r.type === 'error' ? `# ERROR: ${r.error}` : r.output)
       .join('\n')
@@ -255,7 +264,48 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
   }) as T
 }
 
-// ── Conversion ─────────────────────────────────────────────
+// ── Hero conversion (auto-copy on success) ─────────────────
+async function heroRunConversion(value: string) {
+  if (!value) {
+    heroResult.value = null
+    heroError.value = ''
+    return
+  }
+  try {
+    const resp = await convertValues({ direction: direction.value, values: [value] })
+    const r = resp.results[0]
+    heroResult.value = r
+    heroError.value = ''
+    if (r && r.type !== 'error') {
+      try {
+        await navigator.clipboard.writeText(r.output)
+      } catch {
+        const ta = document.createElement('textarea')
+        ta.value = r.output
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      heroJustCopied.value = true
+      setTimeout(() => { heroJustCopied.value = false }, 2000)
+    }
+  } catch (e: unknown) {
+    heroError.value = e instanceof Error ? e.message : 'Unknown error'
+    heroResult.value = null
+  }
+}
+
+const debouncedHero = debounce(() => {
+  const v = heroInput.value.trim()
+  heroRunConversion(v)
+}, 350)
+
+function onHeroInput() {
+  debouncedHero()
+}
+
+// ── Multi conversion ───────────────────────────────────────
 async function runConversion(values: string[]) {
   if (!values.length) {
     results.value = []
@@ -275,15 +325,6 @@ async function runConversion(values: string[]) {
   }
 }
 
-const debouncedSingle = debounce(() => {
-  const v = singleInput.value.trim()
-  runConversion(v ? [v] : [])
-}, 350)
-
-function onSingleInput() {
-  debouncedSingle()
-}
-
 function convertMulti() {
   const lines = multiInput.value
     .split('\n')
@@ -292,26 +333,22 @@ function convertMulti() {
   runConversion(lines)
 }
 
-// ── Mode / direction switching ─────────────────────────────
-function setMode(multi: boolean) {
-  multiMode.value = multi
-  results.value = []
-  apiError.value = ''
-}
-
+// ── Direction switching ────────────────────────────────────
 function toggleDirection() {
   setDirection(direction.value === 'to_numeric' ? 'to_string' : 'to_numeric')
 }
 
 function setDirection(dir: Direction) {
   direction.value = dir
-  singleInput.value = ''
+  heroInput.value = ''
+  heroResult.value = null
+  heroError.value = ''
   multiInput.value = ''
   results.value = []
   apiError.value = ''
 }
 
-// ── Clipboard ──────────────────────────────────────────────
+// ── Clipboard (multi panel) ────────────────────────────────
 async function copyOutput() {
   if (!outputText.value) return
   try {
@@ -483,6 +520,83 @@ async function copyOutput() {
   text-shadow: 0 0 10px rgba(0,255,136,0.6);
 }
 
+/* ── Hero section ────────────────────────────────── */
+.cp-hero {
+  margin-bottom: 32px;
+  padding: 24px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  box-shadow: 0 0 40px rgba(0,255,136,0.04), inset 0 0 60px rgba(0,255,136,0.015);
+}
+
+.cp-hero-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cp-hero-input {
+  flex: 1;
+  padding: 14px 18px;
+  font-size: 20px;
+  background: var(--surface-hi);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--text-bright);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  caret-color: var(--green);
+}
+
+.cp-hero-input::placeholder {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.cp-hero-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(0,255,136,0.12), inset 0 0 30px rgba(0,255,136,0.03);
+}
+
+.cp-hero-copied {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--green);
+  text-shadow: 0 0 10px rgba(0,255,136,0.5);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cp-hero-output-wrap {
+  margin-top: 14px;
+  min-height: 28px;
+  display: flex;
+  align-items: baseline;
+}
+
+.cp-hero-output {
+  margin: 0;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--green);
+  text-shadow: 0 0 20px rgba(0,255,136,0.35);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.cp-hero-hint {
+  font-size: 12px;
+}
+
+/* ── Multi section ───────────────────────────────── */
+.cp-multi-section {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+}
+
 /* ── Panels layout ───────────────────────────────── */
 .cp-panels {
   display: flex;
@@ -550,7 +664,6 @@ async function copyOutput() {
 }
 
 /* ── Tabs ────────────────────────────────────────── */
-.cp-mode-toggle,
 .cp-output-controls {
   display: flex;
   align-items: center;
@@ -584,28 +697,6 @@ async function copyOutput() {
 /* ── Input fields ────────────────────────────────── */
 .cp-mono {
   font-family: var(--mono) !important;
-}
-
-.cp-input {
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 13px;
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-bright);
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  caret-color: var(--green);
-}
-
-.cp-input::placeholder {
-  color: var(--text-dim);
-}
-
-.cp-input:focus {
-  border-color: var(--border-hi);
-  box-shadow: 0 0 0 1px rgba(0,255,136,0.12), inset 0 0 20px rgba(0,255,136,0.03);
 }
 
 .cp-textarea {
@@ -837,6 +928,15 @@ async function copyOutput() {
   .cp-dir-opt {
     padding: 5px 10px;
     font-size: 10px;
+  }
+
+  .cp-hero-input {
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+
+  .cp-hero-output {
+    font-size: 14px;
   }
 }
 </style>

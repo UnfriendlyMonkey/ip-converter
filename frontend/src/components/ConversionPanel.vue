@@ -145,7 +145,7 @@ const translations = {
     convert:    'CONVERT',
     processing: 'processing...',
     hintSingle: 'converts live · type a valid IP',
-    hintMulti:  'one value per line · Ctrl+Enter to convert',
+    hintMulti:  'one value per line (or comma-separated) · Ctrl+Enter to convert',
     emptyOutput:'// output will appear here',
     footer:     'ipv4 ints · ipv6 byte arrays · CIDR masks supported',
     toastCopied:'Copied to clipboard!',
@@ -170,7 +170,7 @@ const translations = {
     convert:    'КОНВЕРТИРОВАТЬ',
     processing: 'обработка...',
     hintSingle: 'конвертирует автоматически · введите IP',
-    hintMulti:  'по одному значению в строке · Ctrl+Enter',
+    hintMulti:  'по одному значению в строке, или разделенные запятой · Ctrl+Enter',
     emptyOutput:'// результат появится здесь',
     footer:     'ipv4 целые числа · ipv6 байт-массивы · маски CIDR',
     toastCopied:'Скопировано!',
@@ -325,12 +325,45 @@ async function runConversion(values: string[]) {
   }
 }
 
+// Split by newlines, then also by commas that are outside [...] brackets
+function splitMultiValues(raw: string): string[] {
+  const values: string[] = []
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  for (const line of lines) {
+    // Check for commas outside brackets
+    let depth = 0
+    let hasOuterComma = false
+    for (const ch of line) {
+      if (ch === '[') depth++
+      else if (ch === ']') depth--
+      else if (ch === ',' && depth === 0) { hasOuterComma = true; break }
+    }
+    if (!hasOuterComma) {
+      values.push(line)
+      continue
+    }
+    // Split on commas outside brackets
+    let current = ''
+    depth = 0
+    for (const ch of line) {
+      if (ch === '[') { depth++; current += ch }
+      else if (ch === ']') { depth--; current += ch }
+      else if (ch === ',' && depth === 0) {
+        const v = current.trim()
+        if (v) values.push(v)
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+    const v = current.trim()
+    if (v) values.push(v)
+  }
+  return values
+}
+
 function convertMulti() {
-  const lines = multiInput.value
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-  runConversion(lines)
+  runConversion(splitMultiValues(multiInput.value))
 }
 
 // ── Direction switching ────────────────────────────────────

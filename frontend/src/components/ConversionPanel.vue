@@ -37,6 +37,11 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
       )
       transition(name="toast")
         span.cp-hero-copied(v-if="heroJustCopied") {{ t('copied') }}
+      button.cp-hero-history-btn(
+        v-if="history.length"
+        @click="historyOpen = true"
+        :title="t('historyBtn')"
+      ) ⏱
     div.cp-hero-output-wrap
       pre.cp-hero-output.cp-mono(v-if="heroOutputText") {{ heroOutputText }}
       span.cp-hint.cp-hero-hint(v-else-if="heroError" style="color: var(--error)") {{ heroError }}
@@ -117,6 +122,23 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
   //- Copy toast
   transition(name="toast")
     div.cp-toast(v-if="justCopied") {{ t('toastCopied') }}
+
+  //- ── History overlay ──────────────────────────────────────
+  transition(name="overlay")
+    .cp-history-overlay(v-if="historyOpen" @click.self="historyOpen = false")
+      .cp-history-panel
+        .cp-history-header
+          span.cp-history-title {{ t('history') }}
+          button.cp-history-close(@click="historyOpen = false") ✕
+        .cp-history-list
+          .cp-history-item(
+            v-for="(entry, i) in history"
+            :key="i"
+            @click="applyHistory(entry)"
+          )
+            span.cp-history-in {{ entry.input }}
+            span.cp-history-arrow →
+            span.cp-history-out {{ entry.output }}
 </template>
 
 <script setup lang="ts">
@@ -151,6 +173,8 @@ const translations = {
     toastCopied:'Copied to clipboard!',
     about:      'About',
     license:    'MIT License',
+    history:    'HISTORY',
+    historyBtn: 'Recent conversions',
   },
   ru: {
     strToNum:   'СТРОКА → ЧИСЛО',
@@ -176,6 +200,8 @@ const translations = {
     toastCopied:'Скопировано!',
     about:      'О сервисе',
     license:    'Лицензия MIT',
+    history:    'ИСТОРИЯ',
+    historyBtn: 'Недавние конвертации',
   },
 } as const
 
@@ -208,6 +234,10 @@ const heroInput = ref('')
 const heroResult = ref<ConversionResult | null>(null)
 const heroError = ref('')
 const heroJustCopied = ref(false)
+const historyOpen = ref(false)
+const history = ref<Array<{ input: string; output: string; direction: Direction }>>(
+  JSON.parse(localStorage.getItem('conversion_history') || '[]')
+)
 
 // Multi / batch
 const multiInput = ref('')
@@ -289,6 +319,11 @@ async function heroRunConversion(value: string) {
       }
       heroJustCopied.value = true
       setTimeout(() => { heroJustCopied.value = false }, 2000)
+      history.value = [
+        { input: value, output: r.output, direction: direction.value },
+        ...history.value.filter(h => h.input !== value || h.direction !== direction.value),
+      ].slice(0, 5)
+      localStorage.setItem('conversion_history', JSON.stringify(history.value))
     }
   } catch (e: unknown) {
     heroError.value = e instanceof Error ? e.message : 'Unknown error'
@@ -303,6 +338,13 @@ const debouncedHero = debounce(() => {
 
 function onHeroInput() {
   debouncedHero()
+}
+
+function applyHistory(entry: { input: string; output: string; direction: Direction }) {
+  historyOpen.value = false
+  direction.value = entry.direction
+  heroInput.value = entry.input
+  heroRunConversion(entry.input)
 }
 
 // ── Multi conversion ───────────────────────────────────────
@@ -934,6 +976,154 @@ async function copyOutput() {
   --text-bright: #0a1a0a;
   --text-dim: #7a9a7a;
   --error: #cc0033;
+}
+
+/* ── History button ──────────────────────────────────────── */
+.cp-hero-history-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: transparent;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.18s;
+  line-height: 1;
+}
+
+.cp-hero-history-btn:hover {
+  color: var(--green);
+  border-color: var(--green);
+  box-shadow: 0 0 10px rgba(0,255,136,0.2);
+}
+
+/* ── History overlay ─────────────────────────────────────── */
+.cp-history-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.cp-history-panel {
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  box-shadow: 0 0 60px rgba(0,255,136,0.08);
+  width: min(560px, calc(100vw - 32px));
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cp-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,255,136,0.03);
+  flex-shrink: 0;
+}
+
+.cp-history-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--green-dim);
+}
+
+.cp-history-close {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.cp-history-close:hover {
+  color: var(--green);
+  border-color: var(--border-hi);
+}
+
+.cp-history-list {
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cp-history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.cp-history-item:hover {
+  border-color: var(--border-hi);
+  background: rgba(0,255,136,0.05);
+}
+
+.cp-history-in {
+  color: var(--text-bright);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.cp-history-arrow {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.cp-history-out {
+  color: var(--green);
+  text-shadow: 0 0 10px rgba(0,255,136,0.25);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: right;
+}
+
+/* ── Overlay transition ──────────────────────────────────── */
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity 0.2s;
+}
+
+.overlay-enter-from,
+.overlay-leave-to {
+  opacity: 0;
 }
 
 /* ── Responsive ──────────────────────────────────── */

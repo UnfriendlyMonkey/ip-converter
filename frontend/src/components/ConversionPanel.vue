@@ -39,7 +39,7 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
         span.cp-hero-copied(v-if="heroJustCopied") {{ t('copied') }}
       button.cp-hero-history-btn(
         v-if="history.length"
-        @click="historyOpen = true"
+        @click="openHistory"
         :title="t('historyBtn')"
       ) ⏱
     div.cp-hero-output-wrap
@@ -128,11 +128,22 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
     .cp-history-overlay(v-if="historyOpen" @click.self="historyOpen = false")
       .cp-history-panel
         .cp-history-header
-          span.cp-history-title {{ t('history') }}
+          .cp-history-tabs
+            button(
+              :class="['cp-history-tab', historyTab === 'to_numeric' && 'cp-history-tab--active']"
+              @click="historyTab = 'to_numeric'"
+            ) {{ t('strToNum') }}
+            button(
+              :class="['cp-history-tab', historyTab === 'to_string' && 'cp-history-tab--active']"
+              @click="historyTab = 'to_string'"
+            ) {{ t('numToStr') }}
           button.cp-history-close(@click="historyOpen = false") ✕
         .cp-history-list
+          .cp-history-empty(v-if="!historyByTab.length")
+            span.cp-hint {{ t('historyEmpty') }}
           .cp-history-item(
-            v-for="(entry, i) in history"
+            v-else
+            v-for="(entry, i) in historyByTab"
             :key="i"
             @click="applyHistory(entry)"
           )
@@ -173,8 +184,9 @@ const translations = {
     toastCopied:'Copied to clipboard!',
     about:      'About',
     license:    'MIT License',
-    history:    'HISTORY',
-    historyBtn: 'Recent conversions',
+    history:      'HISTORY',
+    historyBtn:   'Recent conversions',
+    historyEmpty: 'No conversions yet',
   },
   ru: {
     strToNum:   'СТРОКА → ЧИСЛО',
@@ -200,8 +212,9 @@ const translations = {
     toastCopied:'Скопировано!',
     about:      'О сервисе',
     license:    'Лицензия MIT',
-    history:    'ИСТОРИЯ',
-    historyBtn: 'Недавние конвертации',
+    history:      'ИСТОРИЯ',
+    historyBtn:   'Недавние конвертации',
+    historyEmpty: 'Конвертаций пока нет',
   },
 } as const
 
@@ -235,9 +248,16 @@ const heroResult = ref<ConversionResult | null>(null)
 const heroError = ref('')
 const heroJustCopied = ref(false)
 const historyOpen = ref(false)
+const historyTab = ref<Direction>('to_numeric')
 const history = ref<Array<{ input: string; output: string; direction: Direction }>>(
   JSON.parse(localStorage.getItem('conversion_history') || '[]')
 )
+const historyByTab = computed(() => history.value.filter(h => h.direction === historyTab.value))
+
+function openHistory() {
+  historyTab.value = direction.value
+  historyOpen.value = true
+}
 
 // Multi / batch
 const multiInput = ref('')
@@ -319,10 +339,13 @@ async function heroRunConversion(value: string) {
       }
       heroJustCopied.value = true
       setTimeout(() => { heroJustCopied.value = false }, 2000)
-      history.value = [
-        { input: value, output: r.output, direction: direction.value },
-        ...history.value.filter(h => h.input !== value || h.direction !== direction.value),
+      const dir = direction.value
+      const sameDir = [
+        { input: value, output: r.output, direction: dir },
+        ...history.value.filter(h => h.direction === dir && h.input !== value),
       ].slice(0, 5)
+      const otherDir = history.value.filter(h => h.direction !== dir)
+      history.value = [...sameDir, ...otherDir]
       localStorage.setItem('conversion_history', JSON.stringify(history.value))
     }
   } catch (e: unknown) {
@@ -1035,11 +1058,35 @@ async function copyOutput() {
   flex-shrink: 0;
 }
 
-.cp-history-title {
+.cp-history-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.cp-history-tab {
+  padding: 4px 12px;
+  font-family: var(--mono);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--green-dim);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.cp-history-tab:hover {
+  border-color: var(--border-hi);
+  color: var(--text);
+}
+
+.cp-history-tab--active {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: var(--border-hi);
+  color: var(--green);
 }
 
 .cp-history-close {
@@ -1069,6 +1116,15 @@ async function copyOutput() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 60px;
+}
+
+.cp-history-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
 }
 
 .cp-history-item {

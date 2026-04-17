@@ -11,17 +11,6 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
       button.cp-lang-btn(@click="toggleLang" :title="t('switchLang')") {{ lang === 'en' ? 'RU' : 'EN' }}
       button.cp-theme-btn(@click="toggleTheme" :title="darkMode ? t('toLight') : t('toDark')")
         | {{ darkMode ? '☀' : '☾' }}
-      div.cp-dir-controls
-        div.cp-dir-toggle
-          button(
-            :class="['cp-dir-opt', direction === 'to_numeric' && 'cp-dir-opt--active']"
-            @click="setDirection('to_numeric')"
-          ) {{ t('strToNum') }}
-          button.cp-dir-swap(@click="toggleDirection" :title="t('swapDir')") ⇄
-          button(
-            :class="['cp-dir-opt', direction === 'to_string' && 'cp-dir-opt--active']"
-            @click="setDirection('to_string')"
-          ) {{ t('numToStr') }}
 
   //- ── Hero single input ────────────────────────────────────
   section.cp-hero
@@ -46,6 +35,19 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
       pre.cp-hero-output.cp-mono(v-if="heroOutputText") {{ heroOutputText }}
       span.cp-hint.cp-hero-hint(v-else-if="heroError" style="color: var(--error)") {{ heroError }}
       span.cp-hint.cp-hero-hint(v-else) {{ t('hintSingle') }}
+
+  //- ── Direction switcher ──────────────────────────────────
+  div.cp-dir-row
+    div.cp-dir-toggle
+      button(
+        :class="['cp-dir-opt', direction === 'to_numeric' && 'cp-dir-opt--active']"
+        @click="setDirection('to_numeric')"
+      ) {{ t('strToNum') }}
+      button.cp-dir-swap(@click="toggleDirection" :title="t('swapDir')") ⇄
+      button(
+        :class="['cp-dir-opt', direction === 'to_string' && 'cp-dir-opt--active']"
+        @click="setDirection('to_string')"
+      ) {{ t('numToStr') }}
 
   //- ── Multi / batch section ────────────────────────────────
   div.cp-multi-section
@@ -558,10 +560,11 @@ async function copyOutput() {
   box-shadow: 0 0 12px rgba(0,255,136,0.2);
 }
 
-/* ── Dir controls ────────────────────────────────── */
-.cp-dir-controls {
+/* ── Dir row ─────────────────────────────────────── */
+.cp-dir-row {
   display: flex;
-  align-items: center;
+  justify-content: center;
+  margin: 0 0 24px;
 }
 
 .cp-dir-toggle {
@@ -620,7 +623,7 @@ async function copyOutput() {
 
 /* ── Hero section ────────────────────────────────── */
 .cp-hero {
-  margin-bottom: 32px;
+  margin-bottom: 20px;
   padding: 24px 28px;
   background: var(--surface);
   border: 1px solid var(--border-hi);

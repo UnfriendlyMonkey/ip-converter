@@ -29,14 +29,14 @@ div.cp-content
   div.cp-dir-row
     div.cp-dir-toggle
       button(
-        :class="['cp-dir-opt', direction === 'to_numeric' && 'cp-dir-opt--active']"
-        @click="setDirection('to_numeric')"
-      ) {{ t('strToNum') }}
+        :class="['cp-dir-opt', direction === 'to_human' && 'cp-dir-opt--active']"
+        @click="setDirection('to_human')"
+      ) {{ t('unixToHuman') }}
       button.cp-dir-swap(@click="toggleDirection" :title="t('swapDir')") ⇄
       button(
-        :class="['cp-dir-opt', direction === 'to_string' && 'cp-dir-opt--active']"
-        @click="setDirection('to_string')"
-      ) {{ t('numToStr') }}
+        :class="['cp-dir-opt', direction === 'to_unix' && 'cp-dir-opt--active']"
+        @click="setDirection('to_unix')"
+      ) {{ t('humanToUnix') }}
 
   //- ── Multi / batch section ────────────────────────────────
   div.cp-multi-section
@@ -121,13 +121,13 @@ div.cp-content
         .cp-history-header
           .cp-history-tabs
             button(
-              :class="['cp-history-tab', historyTab === 'to_numeric' && 'cp-history-tab--active']"
-              @click="historyTab = 'to_numeric'"
-            ) {{ t('strToNum') }}
+              :class="['cp-history-tab', historyTab === 'to_human' && 'cp-history-tab--active']"
+              @click="historyTab = 'to_human'"
+            ) {{ t('unixToHuman') }}
             button(
-              :class="['cp-history-tab', historyTab === 'to_string' && 'cp-history-tab--active']"
-              @click="historyTab = 'to_string'"
-            ) {{ t('numToStr') }}
+              :class="['cp-history-tab', historyTab === 'to_unix' && 'cp-history-tab--active']"
+              @click="historyTab = 'to_unix'"
+            ) {{ t('humanToUnix') }}
           button.cp-history-close(@click="historyOpen = false") ✕
         .cp-history-list
           .cp-history-empty(v-if="!historyByTab.length")
@@ -145,7 +145,7 @@ div.cp-content
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { convertValues, type Direction, type ConversionResult } from '../api/converter'
+import { convertTimestamps, type TsDirection, type TsConversionResult } from '../api/timestamp'
 import { useSettings } from '../composables/useSettings'
 
 // ── i18n ────────────────────────────────────────────────────
@@ -153,8 +153,8 @@ type Lang = 'en' | 'ru'
 
 const translations = {
   en: {
-    strToNum:    'STRING → NUM',
-    numToStr:    'NUM → STRING',
+    unixToHuman: 'UNIX → HUMAN',
+    humanToUnix: 'HUMAN → UNIX',
     swapDir:     'Swap direction',
     output:      'OUTPUT',
     multi:       'MULTI',
@@ -164,10 +164,10 @@ const translations = {
     copied:      '✓ COPIED',
     convert:     'CONVERT',
     processing:  'processing...',
-    hintSingle:  'converts live · type a valid IP',
+    hintSingle:  'converts live · unix timestamp or DD.MM.YYYY HH:mm:ss',
     hintMulti:   'one value per line (or comma-separated) · Ctrl+Enter to convert',
     emptyOutput: '// output will appear here',
-    footer:      'ipv4 ints · ipv6 byte arrays · CIDR masks supported',
+    footer:      'unix seconds · milliseconds auto-detected · DD.MM.YYYY HH:mm:ss UTC',
     toastCopied: 'Copied to clipboard!',
     about:       'About',
     license:     'MIT License',
@@ -175,8 +175,8 @@ const translations = {
     historyEmpty:'No conversions yet',
   },
   ru: {
-    strToNum:    'СТРОКА → ЧИСЛО',
-    numToStr:    'ЧИСЛО → СТРОКА',
+    unixToHuman: 'UNIX → ДАТА',
+    humanToUnix: 'ДАТА → UNIX',
     swapDir:     'Сменить направление',
     output:      'ВЫВОД',
     multi:       'МНОГО',
@@ -186,10 +186,10 @@ const translations = {
     copied:      '✓ СКОПИРОВАНО',
     convert:     'КОНВЕРТИРОВАТЬ',
     processing:  'обработка...',
-    hintSingle:  'конвертирует автоматически · введите IP',
+    hintSingle:  'конвертирует автоматически · unix timestamp или ДД.ММ.ГГГГ ЧЧ:мм:сс',
     hintMulti:   'по одному значению в строке, или разделенные запятой · Ctrl+Enter',
     emptyOutput: '// результат появится здесь',
-    footer:      'ipv4 целые числа · ipv6 байт-массивы · маски CIDR',
+    footer:      'unix секунды · миллисекунды определяются автоматически · ДД.ММ.ГГГГ ЧЧ:мм:сс UTC',
     toastCopied: 'Скопировано!',
     about:       'О сервисе',
     license:     'Лицензия MIT',
@@ -207,17 +207,17 @@ function t(key: TKey): string {
 }
 
 // ── State ──────────────────────────────────────────────────
-const direction = ref<Direction>('to_numeric')
+const direction = ref<TsDirection>('to_human')
 
 // Hero (single)
 const heroInput = ref('')
-const heroResult = ref<ConversionResult | null>(null)
+const heroResult = ref<TsConversionResult | null>(null)
 const heroError = ref('')
 const heroJustCopied = ref(false)
 const historyOpen = ref(false)
-const historyTab = ref<Direction>('to_numeric')
-const history = ref<Array<{ input: string; output: string; direction: Direction }>>(
-  JSON.parse(localStorage.getItem('conversion_history') || '[]')
+const historyTab = ref<TsDirection>('to_human')
+const history = ref<Array<{ input: string; output: string; direction: TsDirection }>>(
+  JSON.parse(localStorage.getItem('ts_history') || '[]')
 )
 const historyByTab = computed(() => history.value.filter(h => h.direction === historyTab.value))
 
@@ -229,22 +229,22 @@ function openHistory() {
 // Multi / batch
 const multiInput = ref('')
 const outputFormat = ref<'list' | 'dict'>('list')
-const results = ref<ConversionResult[]>([])
+const results = ref<TsConversionResult[]>([])
 const loading = ref(false)
 const apiError = ref('')
 const justCopied = ref(false)
 
 // ── Placeholders ───────────────────────────────────────────
 const singlePlaceholder = computed(() =>
-  direction.value === 'to_numeric'
-    ? '192.168.1.1  or  192.168.1.0/24  or  2001:db8::1'
-    : '3232235777  or  3232235776/24  or  [32,1,13,184,...,1]'
+  direction.value === 'to_human'
+    ? '1700000000  or  1700000000000 (ms)'
+    : '15.11.2023 21:53:20  or  15.11.2023 21:53:20 UTC'
 )
 
 const multiPlaceholder = computed(() =>
-  direction.value === 'to_numeric'
-    ? '192.168.1.1\n192.168.1.0/24\n2001:db8::1\n2001:db8::/32'
-    : '3232235777\n3232235776/24\n[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,1]\n[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,0]/32'
+  direction.value === 'to_human'
+    ? '1700000000\n1700000000000\n1699920000'
+    : '15.11.2023 21:53:20 UTC\n01.01.2024 00:00:00\n31.12.2023 23:59:59'
 )
 
 // ── Hero output ────────────────────────────────────────────
@@ -289,7 +289,7 @@ async function heroRunConversion(value: string) {
     return
   }
   try {
-    const resp = await convertValues({ direction: direction.value, values: [value] })
+    const resp = await convertTimestamps({ direction: direction.value, values: [value] })
     const r = resp.results[0]
     heroResult.value = r
     heroError.value = ''
@@ -313,7 +313,7 @@ async function heroRunConversion(value: string) {
       ].slice(0, 5)
       const otherDir = history.value.filter(h => h.direction !== dir)
       history.value = [...sameDir, ...otherDir]
-      localStorage.setItem('conversion_history', JSON.stringify(history.value))
+      localStorage.setItem('ts_history', JSON.stringify(history.value))
     }
   } catch (e: unknown) {
     heroError.value = e instanceof Error ? e.message : 'Unknown error'
@@ -329,7 +329,7 @@ function onHeroInput() {
   debouncedHero()
 }
 
-function applyHistory(entry: { input: string; output: string; direction: Direction }) {
+function applyHistory(entry: { input: string; output: string; direction: TsDirection }) {
   historyOpen.value = false
   direction.value = entry.direction
   heroInput.value = entry.input
@@ -346,7 +346,7 @@ async function runConversion(values: string[]) {
   loading.value = true
   apiError.value = ''
   try {
-    const resp = await convertValues({ direction: direction.value, values })
+    const resp = await convertTimestamps({ direction: direction.value, values })
     results.value = resp.results
   } catch (e: unknown) {
     apiError.value = e instanceof Error ? e.message : 'Unknown error'
@@ -356,39 +356,8 @@ async function runConversion(values: string[]) {
   }
 }
 
-// Split by newlines, then also by commas that are outside [...] brackets
 function splitMultiValues(raw: string): string[] {
-  const values: string[] = []
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  for (const line of lines) {
-    let depth = 0
-    let hasOuterComma = false
-    for (const ch of line) {
-      if (ch === '[') depth++
-      else if (ch === ']') depth--
-      else if (ch === ',' && depth === 0) { hasOuterComma = true; break }
-    }
-    if (!hasOuterComma) {
-      values.push(line)
-      continue
-    }
-    let current = ''
-    depth = 0
-    for (const ch of line) {
-      if (ch === '[') { depth++; current += ch }
-      else if (ch === ']') { depth--; current += ch }
-      else if (ch === ',' && depth === 0) {
-        const v = current.trim()
-        if (v) values.push(v)
-        current = ''
-      } else {
-        current += ch
-      }
-    }
-    const v = current.trim()
-    if (v) values.push(v)
-  }
-  return values
+  return raw.split(/[\n,]/).map(s => s.trim()).filter(s => s.length > 0)
 }
 
 function convertMulti() {
@@ -397,10 +366,10 @@ function convertMulti() {
 
 // ── Direction switching ────────────────────────────────────
 function toggleDirection() {
-  setDirection(direction.value === 'to_numeric' ? 'to_string' : 'to_numeric')
+  setDirection(direction.value === 'to_human' ? 'to_unix' : 'to_human')
 }
 
-function setDirection(dir: Direction) {
+function setDirection(dir: TsDirection) {
   direction.value = dir
   heroInput.value = ''
   heroResult.value = null

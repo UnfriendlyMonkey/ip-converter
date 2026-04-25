@@ -3,6 +3,12 @@ div.cp-content
 
   //- ── Hero single input ────────────────────────────────────
   section.cp-hero
+    div.cp-clock-row
+      span.cp-clock {{ clockDisplay }}
+      button.cp-clock-btn(:title="t('clockCopyHint')" @click="copyCurrentTime")
+        i.mdi.mdi-content-copy
+      button.cp-clock-btn(:title="t('clockConvertHint')" @click="convertCurrentTime")
+        i.mdi.mdi-send
     div.cp-hero-input-wrap
       input.cp-hero-input.cp-mono(
         v-model="heroInput"
@@ -144,7 +150,7 @@ div.cp-content
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { convertTimestamps, type TsDirection, type TsConversionResult } from '../api/timestamp'
 import { useSettings } from '../composables/useSettings'
 
@@ -164,6 +170,8 @@ const translations = {
     copied:      '✓ COPIED',
     convert:     'CONVERT',
     processing:  'processing...',
+    clockCopyHint:    'Copy current time to clipboard',
+    clockConvertHint: 'Use as input & convert',
     hintSingle:  'converts live · unix timestamp or DD.MM.YYYY HH:mm:ss',
     hintMulti:   'one value per line (or comma-separated) · Ctrl+Enter to convert',
     emptyOutput: '// output will appear here',
@@ -186,6 +194,8 @@ const translations = {
     copied:      '✓ СКОПИРОВАНО',
     convert:     'КОНВЕРТИРОВАТЬ',
     processing:  'обработка...',
+    clockCopyHint:    'Скопировать текущее время',
+    clockConvertHint: 'Использовать как вход и конвертировать',
     hintSingle:  'конвертирует автоматически · unix timestamp или ДД.ММ.ГГГГ ЧЧ:мм:сс',
     hintMulti:   'по одному значению в строке, или разделенные запятой · Ctrl+Enter',
     emptyOutput: '// результат появится здесь',
@@ -208,6 +218,48 @@ function t(key: TKey): string {
 
 // ── State ──────────────────────────────────────────────────
 const direction = ref<TsDirection>('to_human')
+
+// ── Live clock ─────────────────────────────────────────────
+const clockTick = ref(0)
+
+const clockDisplay = computed(() => {
+  clockTick.value
+  const now = new Date()
+  if (direction.value === 'to_human') {
+    return Math.floor(Date.now() / 1000).toString()
+  }
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(now.getUTCDate())}.${pad(now.getUTCMonth() + 1)}.${now.getUTCFullYear()} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`
+})
+
+let clockInterval: ReturnType<typeof setInterval>
+
+onMounted(() => {
+  clockInterval = setInterval(() => { clockTick.value++ }, 1000)
+})
+
+onUnmounted(() => {
+  clearInterval(clockInterval)
+})
+
+async function copyCurrentTime() {
+  const text = clockDisplay.value
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+}
+
+function convertCurrentTime() {
+  heroInput.value = clockDisplay.value
+  heroRunConversion(clockDisplay.value)
+}
 
 // Hero (single)
 const heroInput = ref('')
@@ -1007,6 +1059,46 @@ async function copyOutput() {
 .overlay-enter-from,
 .overlay-leave-to {
   opacity: 0;
+}
+
+/* ── Live clock row ──────────────────────────────── */
+.cp-clock-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cp-clock {
+  font-family: var(--mono);
+  font-size: 24px;
+  color: var(--text);
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.cp-clock-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.cp-clock-btn:hover {
+  color: var(--green);
+  border-color: var(--border-hi);
+  box-shadow: 0 0 8px rgba(0,255,136,0.15);
 }
 
 /* ── Responsive ──────────────────────────────────── */

@@ -1,19 +1,14 @@
 <template lang="pug">
-div.cp-root(:class="{ 'cp-root--light': !darkMode }")
-
-  //- ── Top bar ──────────────────────────────────────────────
-  header.cp-header
-    div.cp-brand
-      span.cp-brand-icon ⬡
-      span.cp-brand-name IP CONVERTER
-
-    div.cp-header-right
-      button.cp-lang-btn(@click="toggleLang" :title="t('switchLang')") {{ lang === 'en' ? 'RU' : 'EN' }}
-      button.cp-theme-btn(@click="toggleTheme" :title="darkMode ? t('toLight') : t('toDark')")
-        | {{ darkMode ? '☀' : '☾' }}
+div.cp-content
 
   //- ── Hero single input ────────────────────────────────────
   section.cp-hero
+    div.cp-clock-row
+      span.cp-clock {{ clockDisplay }}
+      button.cp-clock-btn(:title="t('clockCopyHint')" @click="copyCurrentTime")
+        i.mdi.mdi-content-copy
+      button.cp-clock-btn(:title="t('clockConvertHint')" @click="convertCurrentTime")
+        i.mdi.mdi-send
     div.cp-hero-input-wrap
       input.cp-hero-input.cp-mono(
         v-model="heroInput"
@@ -40,14 +35,14 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
   div.cp-dir-row
     div.cp-dir-toggle
       button(
-        :class="['cp-dir-opt', direction === 'to_numeric' && 'cp-dir-opt--active']"
-        @click="setDirection('to_numeric')"
-      ) {{ t('strToNum') }}
+        :class="['cp-dir-opt', direction === 'to_human' && 'cp-dir-opt--active']"
+        @click="setDirection('to_human')"
+      ) {{ t('unixToHuman') }}
       button.cp-dir-swap(@click="toggleDirection" :title="t('swapDir')") ⇄
       button(
-        :class="['cp-dir-opt', direction === 'to_string' && 'cp-dir-opt--active']"
-        @click="setDirection('to_string')"
-      ) {{ t('numToStr') }}
+        :class="['cp-dir-opt', direction === 'to_unix' && 'cp-dir-opt--active']"
+        @click="setDirection('to_unix')"
+      ) {{ t('humanToUnix') }}
 
   //- ── Multi / batch section ────────────────────────────────
   div.cp-multi-section
@@ -132,13 +127,13 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
         .cp-history-header
           .cp-history-tabs
             button(
-              :class="['cp-history-tab', historyTab === 'to_numeric' && 'cp-history-tab--active']"
-              @click="historyTab = 'to_numeric'"
-            ) {{ t('strToNum') }}
+              :class="['cp-history-tab', historyTab === 'to_human' && 'cp-history-tab--active']"
+              @click="historyTab = 'to_human'"
+            ) {{ t('unixToHuman') }}
             button(
-              :class="['cp-history-tab', historyTab === 'to_string' && 'cp-history-tab--active']"
-              @click="historyTab = 'to_string'"
-            ) {{ t('numToStr') }}
+              :class="['cp-history-tab', historyTab === 'to_unix' && 'cp-history-tab--active']"
+              @click="historyTab = 'to_unix'"
+            ) {{ t('humanToUnix') }}
           button.cp-history-close(@click="historyOpen = false") ✕
         .cp-history-list
           .cp-history-empty(v-if="!historyByTab.length")
@@ -155,104 +150,126 @@ div.cp-root(:class="{ 'cp-root--light': !darkMode }")
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { convertValues, type Direction, type ConversionResult } from '../api/converter'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { convertTimestamps, type TsDirection, type TsConversionResult } from '../api/timestamp'
+import { useSettings } from '../composables/useSettings'
 
 // ── i18n ────────────────────────────────────────────────────
 type Lang = 'en' | 'ru'
 
 const translations = {
   en: {
-    strToNum:   'STRING → NUM',
-    numToStr:   'NUM → STRING',
-    swapDir:    'Swap direction',
-    toLight:    'Switch to light mode',
-    toDark:     'Switch to dark mode',
-    switchLang: 'Switch to Russian',
-    input:      'INPUT',
-    output:     'OUTPUT',
-    single:     'SINGLE',
-    multi:      'MULTI',
-    list:       'LIST',
-    dict:       'DICT',
-    copy:       'COPY',
-    copied:     '✓ COPIED',
-    convert:    'CONVERT',
-    processing: 'processing...',
-    hintSingle: 'converts live · type a valid IP',
-    hintMulti:  'one value per line (or comma-separated) · Ctrl+Enter to convert',
-    emptyOutput:'// output will appear here',
-    footer:     'ipv4 ints · ipv6 byte arrays · CIDR masks supported',
-    toastCopied:'Copied to clipboard!',
-    about:      'About',
-    license:    'MIT License',
-    history:      'HISTORY',
-    historyBtn:   'Recent conversions',
-    historyEmpty: 'No conversions yet',
+    unixToHuman: 'UNIX → HUMAN',
+    humanToUnix: 'HUMAN → UNIX',
+    swapDir:     'Swap direction',
+    output:      'OUTPUT',
+    multi:       'MULTI',
+    list:        'LIST',
+    dict:        'DICT',
+    copy:        'COPY',
+    copied:      '✓ COPIED',
+    convert:     'CONVERT',
+    processing:  'processing...',
+    clockCopyHint:    'Copy current time to clipboard',
+    clockConvertHint: 'Use as input & convert',
+    hintSingle:  'converts live · unix timestamp or DD.MM.YYYY HH:mm:ss',
+    hintMulti:   'one value per line (or comma-separated) · Ctrl+Enter to convert',
+    emptyOutput: '// output will appear here',
+    footer:      'unix seconds · milliseconds auto-detected · DD.MM.YYYY HH:mm:ss UTC',
+    toastCopied: 'Copied to clipboard!',
+    about:       'About',
+    license:     'MIT License',
+    historyBtn:  'Recent conversions',
+    historyEmpty:'No conversions yet',
   },
   ru: {
-    strToNum:   'СТРОКА → ЧИСЛО',
-    numToStr:   'ЧИСЛО → СТРОКА',
-    swapDir:    'Сменить направление',
-    toLight:    'Светлая тема',
-    toDark:     'Тёмная тема',
-    switchLang: 'Switch to English',
-    input:      'ВВОД',
-    output:     'ВЫВОД',
-    single:     'ОДНО',
-    multi:      'МНОГО',
-    list:       'СПИСОК',
-    dict:       'СЛОВАРЬ',
-    copy:       'КОПИРОВАТЬ',
-    copied:     '✓ СКОПИРОВАНО',
-    convert:    'КОНВЕРТИРОВАТЬ',
-    processing: 'обработка...',
-    hintSingle: 'конвертирует автоматически · введите IP',
-    hintMulti:  'по одному значению в строке, или разделенные запятой · Ctrl+Enter',
-    emptyOutput:'// результат появится здесь',
-    footer:     'ipv4 целые числа · ipv6 байт-массивы · маски CIDR',
-    toastCopied:'Скопировано!',
-    about:      'О сервисе',
-    license:    'Лицензия MIT',
-    history:      'ИСТОРИЯ',
-    historyBtn:   'Недавние конвертации',
-    historyEmpty: 'Конвертаций пока нет',
+    unixToHuman: 'UNIX → ДАТА',
+    humanToUnix: 'ДАТА → UNIX',
+    swapDir:     'Сменить направление',
+    output:      'ВЫВОД',
+    multi:       'МНОГО',
+    list:        'СПИСОК',
+    dict:        'СЛОВАРЬ',
+    copy:        'КОПИРОВАТЬ',
+    copied:      '✓ СКОПИРОВАНО',
+    convert:     'КОНВЕРТИРОВАТЬ',
+    processing:  'обработка...',
+    clockCopyHint:    'Скопировать текущее время',
+    clockConvertHint: 'Использовать как вход и конвертировать',
+    hintSingle:  'конвертирует автоматически · unix timestamp или ДД.ММ.ГГГГ ЧЧ:мм:сс',
+    hintMulti:   'по одному значению в строке, или разделенные запятой · Ctrl+Enter',
+    emptyOutput: '// результат появится здесь',
+    footer:      'unix секунды · миллисекунды определяются автоматически · ДД.ММ.ГГГГ ЧЧ:мм:сс UTC',
+    toastCopied: 'Скопировано!',
+    about:       'О сервисе',
+    license:     'Лицензия MIT',
+    historyBtn:  'Недавние конвертации',
+    historyEmpty:'Конвертаций пока нет',
   },
 } as const
 
 type TKey = keyof typeof translations.en
 
-const lang = ref<Lang>((localStorage.getItem('lang') as Lang) || 'en')
+const { lang } = useSettings()
 
 function t(key: TKey): string {
-  return translations[lang.value][key]
-}
-
-function toggleLang() {
-  lang.value = lang.value === 'en' ? 'ru' : 'en'
-  localStorage.setItem('lang', lang.value)
-}
-
-// ── Theme ──────────────────────────────────────────────────
-const darkMode = ref(localStorage.getItem('theme') !== 'light')
-
-function toggleTheme() {
-  darkMode.value = !darkMode.value
-  localStorage.setItem('theme', darkMode.value ? 'dark' : 'light')
+  return translations[lang.value as Lang][key]
 }
 
 // ── State ──────────────────────────────────────────────────
-const direction = ref<Direction>('to_numeric')
+const direction = ref<TsDirection>('to_human')
+
+// ── Live clock ─────────────────────────────────────────────
+const clockTick = ref(0)
+
+const clockDisplay = computed(() => {
+  clockTick.value
+  const now = new Date()
+  if (direction.value === 'to_human') {
+    return Math.floor(Date.now() / 1000).toString()
+  }
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(now.getUTCDate())}.${pad(now.getUTCMonth() + 1)}.${now.getUTCFullYear()} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`
+})
+
+let clockInterval: ReturnType<typeof setInterval>
+
+onMounted(() => {
+  clockInterval = setInterval(() => { clockTick.value++ }, 1000)
+})
+
+onUnmounted(() => {
+  clearInterval(clockInterval)
+})
+
+async function copyCurrentTime() {
+  const text = clockDisplay.value
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+}
+
+function convertCurrentTime() {
+  heroInput.value = clockDisplay.value
+  heroRunConversion(clockDisplay.value)
+}
 
 // Hero (single)
 const heroInput = ref('')
-const heroResult = ref<ConversionResult | null>(null)
+const heroResult = ref<TsConversionResult | null>(null)
 const heroError = ref('')
 const heroJustCopied = ref(false)
 const historyOpen = ref(false)
-const historyTab = ref<Direction>('to_numeric')
-const history = ref<Array<{ input: string; output: string; direction: Direction }>>(
-  JSON.parse(localStorage.getItem('conversion_history') || '[]')
+const historyTab = ref<TsDirection>('to_human')
+const history = ref<Array<{ input: string; output: string; direction: TsDirection }>>(
+  JSON.parse(localStorage.getItem('ts_history') || '[]')
 )
 const historyByTab = computed(() => history.value.filter(h => h.direction === historyTab.value))
 
@@ -264,22 +281,22 @@ function openHistory() {
 // Multi / batch
 const multiInput = ref('')
 const outputFormat = ref<'list' | 'dict'>('list')
-const results = ref<ConversionResult[]>([])
+const results = ref<TsConversionResult[]>([])
 const loading = ref(false)
 const apiError = ref('')
 const justCopied = ref(false)
 
 // ── Placeholders ───────────────────────────────────────────
 const singlePlaceholder = computed(() =>
-  direction.value === 'to_numeric'
-    ? '192.168.1.1  or  192.168.1.0/24  or  2001:db8::1'
-    : '3232235777  or  3232235776/24  or  [32,1,13,184,...,1]'
+  direction.value === 'to_human'
+    ? '1700000000  or  1700000000000 (ms)'
+    : '15.11.2023 21:53:20  or  15.11.2023 21:53:20 UTC'
 )
 
 const multiPlaceholder = computed(() =>
-  direction.value === 'to_numeric'
-    ? '192.168.1.1\n192.168.1.0/24\n2001:db8::1\n2001:db8::/32'
-    : '3232235777\n3232235776/24\n[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,1]\n[32,1,13,184,0,0,0,0,0,0,0,0,0,0,0,0]/32'
+  direction.value === 'to_human'
+    ? '1700000000\n1700000000000\n1699920000'
+    : '15.11.2023 21:53:20 UTC\n01.01.2024 00:00:00\n31.12.2023 23:59:59'
 )
 
 // ── Hero output ────────────────────────────────────────────
@@ -324,7 +341,7 @@ async function heroRunConversion(value: string) {
     return
   }
   try {
-    const resp = await convertValues({ direction: direction.value, values: [value] })
+    const resp = await convertTimestamps({ direction: direction.value, values: [value] })
     const r = resp.results[0]
     heroResult.value = r
     heroError.value = ''
@@ -348,7 +365,7 @@ async function heroRunConversion(value: string) {
       ].slice(0, 5)
       const otherDir = history.value.filter(h => h.direction !== dir)
       history.value = [...sameDir, ...otherDir]
-      localStorage.setItem('conversion_history', JSON.stringify(history.value))
+      localStorage.setItem('ts_history', JSON.stringify(history.value))
     }
   } catch (e: unknown) {
     heroError.value = e instanceof Error ? e.message : 'Unknown error'
@@ -357,15 +374,14 @@ async function heroRunConversion(value: string) {
 }
 
 const debouncedHero = debounce(() => {
-  const v = heroInput.value.trim()
-  heroRunConversion(v)
+  heroRunConversion(heroInput.value.trim())
 }, 350)
 
 function onHeroInput() {
   debouncedHero()
 }
 
-function applyHistory(entry: { input: string; output: string; direction: Direction }) {
+function applyHistory(entry: { input: string; output: string; direction: TsDirection }) {
   historyOpen.value = false
   direction.value = entry.direction
   heroInput.value = entry.input
@@ -382,7 +398,7 @@ async function runConversion(values: string[]) {
   loading.value = true
   apiError.value = ''
   try {
-    const resp = await convertValues({ direction: direction.value, values })
+    const resp = await convertTimestamps({ direction: direction.value, values })
     results.value = resp.results
   } catch (e: unknown) {
     apiError.value = e instanceof Error ? e.message : 'Unknown error'
@@ -392,41 +408,8 @@ async function runConversion(values: string[]) {
   }
 }
 
-// Split by newlines, then also by commas that are outside [...] brackets
 function splitMultiValues(raw: string): string[] {
-  const values: string[] = []
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  for (const line of lines) {
-    // Check for commas outside brackets
-    let depth = 0
-    let hasOuterComma = false
-    for (const ch of line) {
-      if (ch === '[') depth++
-      else if (ch === ']') depth--
-      else if (ch === ',' && depth === 0) { hasOuterComma = true; break }
-    }
-    if (!hasOuterComma) {
-      values.push(line)
-      continue
-    }
-    // Split on commas outside brackets
-    let current = ''
-    depth = 0
-    for (const ch of line) {
-      if (ch === '[') { depth++; current += ch }
-      else if (ch === ']') { depth--; current += ch }
-      else if (ch === ',' && depth === 0) {
-        const v = current.trim()
-        if (v) values.push(v)
-        current = ''
-      } else {
-        current += ch
-      }
-    }
-    const v = current.trim()
-    if (v) values.push(v)
-  }
-  return values
+  return raw.split(/[\n,]/).map(s => s.trim()).filter(s => s.length > 0)
 }
 
 function convertMulti() {
@@ -435,10 +418,10 @@ function convertMulti() {
 
 // ── Direction switching ────────────────────────────────────
 function toggleDirection() {
-  setDirection(direction.value === 'to_numeric' ? 'to_string' : 'to_numeric')
+  setDirection(direction.value === 'to_human' ? 'to_unix' : 'to_human')
 }
 
-function setDirection(dir: Direction) {
+function setDirection(dir: TsDirection) {
   direction.value = dir
   heroInput.value = ''
   heroResult.value = null
@@ -469,97 +452,6 @@ async function copyOutput() {
 </script>
 
 <style scoped>
-/* ── Design tokens ──────────────────────────────── */
-.cp-root {
-  --bg: #0a0a0f;
-  --surface: #0d0d14;
-  --surface-hi: #131320;
-  --border: rgba(0, 255, 136, 0.12);
-  --border-hi: rgba(0, 255, 136, 0.35);
-  --green: #00ff88;
-  --green-dim: rgba(0, 255, 136, 0.6);
-  --cyan: #00e5ff;
-  --text: #8aa88a;
-  --text-bright: #ccffcc;
-  --text-dim: #3a4a3a;
-  --error: #ff4466;
-  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
-
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 13px;
-  padding: 0 16px 24px;
-}
-
-/* ── Header ──────────────────────────────────────── */
-.cp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 0 16px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
-}
-
-.cp-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cp-brand-icon {
-  font-size: 22px;
-  color: var(--green);
-  filter: drop-shadow(0 0 6px var(--green));
-  line-height: 1;
-}
-
-.cp-brand-name {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  color: var(--green);
-  text-shadow: 0 0 20px rgba(0,255,136,0.4);
-}
-
-.cp-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* ── Lang + Theme buttons ────────────────────────── */
-.cp-lang-btn,
-.cp-theme-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--green);
-  cursor: pointer;
-  transition: all 0.18s;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.cp-lang-btn:hover,
-.cp-theme-btn:hover {
-  background: rgba(0,255,136,0.08);
-  box-shadow: 0 0 12px rgba(0,255,136,0.2);
-}
-
 /* ── Dir row ─────────────────────────────────────── */
 .cp-dir-row {
   display: flex;
@@ -988,22 +880,6 @@ async function copyOutput() {
   transform: translateY(8px);
 }
 
-/* ── Light theme ─────────────────────────────────── */
-.cp-root--light {
-  --bg: #f0f5f0;
-  --surface: #ffffff;
-  --surface-hi: #f8fbf8;
-  --border: rgba(0, 100, 50, 0.15);
-  --border-hi: rgba(0, 100, 50, 0.4);
-  --green: #006633;
-  --green-dim: rgba(0, 102, 51, 0.75);
-  --cyan: #007788;
-  --text: #2a4a2a;
-  --text-bright: #0a1a0a;
-  --text-dim: #7a9a7a;
-  --error: #cc0033;
-}
-
 /* ── History button ──────────────────────────────────────── */
 .cp-hero-history-btn {
   flex-shrink: 0;
@@ -1185,6 +1061,46 @@ async function copyOutput() {
   opacity: 0;
 }
 
+/* ── Live clock row ──────────────────────────────── */
+.cp-clock-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cp-clock {
+  font-family: var(--mono);
+  font-size: 24px;
+  color: var(--text);
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.cp-clock-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.cp-clock-btn:hover {
+  color: var(--green);
+  border-color: var(--border-hi);
+  box-shadow: 0 0 8px rgba(0,255,136,0.15);
+}
+
 /* ── Responsive ──────────────────────────────────── */
 @media (max-width: 768px) {
   .cp-panels {
@@ -1195,16 +1111,6 @@ async function copyOutput() {
     padding: 8px 0;
     rotate: 90deg;
     font-size: 22px;
-  }
-
-  .cp-brand-name {
-    font-size: 15px;
-  }
-
-  .cp-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
   }
 
   .cp-dir-opt {

@@ -34,3 +34,6 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Design sketches
+ummy-converter.html

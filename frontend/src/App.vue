@@ -1,210 +1,372 @@
 <template lang="pug">
 v-app(theme="hacker")
   v-main.app-main
-    .app-root(:class="{ 'app-root--light': !darkMode }")
+    .app-root(data-density="comfy" data-radius="sharp")
       header.app-header
         div.app-brand
-          span.app-brand-icon ⬡
-          span.app-brand-name CONVERTER
-
-        nav.app-nav
-          router-link.app-nav-tab(
-            to="/ip"
-            active-class=""
-            exact-active-class="app-nav-tab--active"
-          ) IP CONVERTER
-          router-link.app-nav-tab(
-            to="/timestamp"
-            active-class=""
-            exact-active-class="app-nav-tab--active"
-          ) TIMESTAMP
+          span.app-brand-mark
+            svg(width="34" height="34" viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square")
+              path(d="M6 11h17l-4 -4")
+              path(d="M28 23h-17l4 4")
+          span.app-brand-text
+            | ummy/converter
+            small brutal little tools for devs
 
         div.app-header-right
-          button.app-ctrl-btn(
-            @click="toggleLang"
-            :title="lang === 'en' ? 'Switch to Russian' : 'Switch to English'"
-          ) {{ lang === 'en' ? 'RU' : 'EN' }}
-          button.app-ctrl-btn(
-            @click="toggleTheme"
-            :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
-          ) {{ darkMode ? '☀' : '☾' }}
+          span.app-pill.app-pill-live {{ clockLabel }}
+          button.app-pill(@click="copyShareLink") ↗ SHARE
+          button.app-pill(@click="cycleTheme" :title="`Theme: ${theme}`") {{ theme.toUpperCase() }}
+          button.app-pill(@click="toggleLang") {{ lang === 'en' ? 'RU' : 'EN' }}
+
+      div.app-header-divider
+
+      nav.app-tabs
+        router-link.app-nav-tab(
+          to="/ip"
+          active-class=""
+          exact-active-class="app-nav-tab--active"
+        )
+          span.app-tab-num 01
+          | IP ADDRESS
+        router-link.app-nav-tab(
+          to="/timestamp"
+          active-class=""
+          exact-active-class="app-nav-tab--active"
+        )
+          span.app-tab-num 02
+          | TIMESTAMP
 
       router-view
 </template>
 
 <script setup lang="ts">
+import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useSettings } from './composables/useSettings'
 
-const { darkMode, lang, toggleTheme, toggleLang } = useSettings()
+const { lang, theme, cycleTheme, toggleLang } = useSettings()
+const clockLabel = ref('00:00:00')
+
+function updateClock() {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  clockLabel.value = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+async function copyShareLink() {
+  try { await navigator.clipboard.writeText(window.location.href) } catch {}
+}
+
+let timer: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  updateClock()
+  timer = setInterval(updateClock, 1000)
+})
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
+
+watchEffect(() => {
+  document.documentElement.setAttribute('data-theme', theme.value)
+})
 </script>
 
 <style>
+:root {
+  --border-w: 2px;
+  --radius: 0px;
+  --pad: 16px;
+  --gap: 12px;
+  --shadow-offset: 6px;
+  --bg: #f4f1ea;
+  --fg: #0a0a0a;
+  --muted: #6b6660;
+  --line: #0a0a0a;
+  --card: #ffffff;
+  --accent: #ff5b1f;
+  --accent-fg: #0a0a0a;
+  --warn: #d4341a;
+  --good: #1f7a3a;
+  --shadow-color: #0a0a0a;
+  --error: var(--warn);
+  --surface: var(--card);
+  --surface-hi: color-mix(in srgb, var(--card) 90%, var(--bg));
+  --border: color-mix(in srgb, var(--line) 25%, transparent);
+  --border-hi: var(--line);
+  --green: var(--accent);
+  --green-dim: color-mix(in srgb, var(--accent) 70%, transparent);
+  --text: var(--fg);
+  --text-bright: var(--fg);
+  --text-dim: var(--muted);
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+:root[data-theme='coal'] {
+  --bg: #0e0e0e;
+  --fg: #f0ece4;
+  --muted: #8a8680;
+  --line: #f0ece4;
+  --card: #181818;
+  --accent: #ffe14a;
+  --accent-fg: #0a0a0a;
+  --warn: #f59e0b;
+  --good: #86efac;
+  --shadow-color: #ffe14a;
+}
+
+:root[data-theme='terminal'] {
+  --bg: #050805;
+  --fg: #b8ffb8;
+  --muted: #4a8a4a;
+  --line: #4ade80;
+  --card: #0a120a;
+  --accent: #4ade80;
+  --accent-fg: #050805;
+  --warn: #f59e0b;
+  --good: #86efac;
+  --shadow-color: #4ade80;
+}
+
+:root[data-theme='pulp'] {
+  --bg: #fff8e7;
+  --fg: #1a0e08;
+  --muted: #6e4a2a;
+  --line: #1a0e08;
+  --card: #ffefc4;
+  --accent: #e63946;
+  --accent-fg: #fff8e7;
+  --warn: #dc2626;
+  --good: #1f7a3a;
+  --shadow-color: #1a0e08;
+}
+
+:root[data-theme='riot'] {
+  --bg: #1f2330;
+  --fg: #ece6d6;
+  --muted: #8a8676;
+  --line: #ece6d6;
+  --card: #272c3b;
+  --accent: #e84a2a;
+  --accent-fg: #ece6d6;
+  --warn: #f97316;
+  --good: #86efac;
+  --shadow-color: #f4c542;
+}
+
 .app-main {
-  background: transparent;
+  background: var(--bg);
   min-height: 100vh;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--fg) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--fg) 6%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#app,
+.v-application,
+.v-application__wrap {
+  background: transparent !important;
 }
 </style>
 
 <style scoped>
-/* ── Design tokens ──────────────────────────────── */
 .app-root {
-  --bg: #0a0a0f;
-  --surface: #0d0d14;
-  --surface-hi: #131320;
-  --border: rgba(0, 255, 136, 0.12);
-  --border-hi: rgba(0, 255, 136, 0.35);
-  --green: #00ff88;
-  --green-dim: rgba(0, 255, 136, 0.6);
-  --cyan: #00e5ff;
-  --text: #8aa88a;
-  --text-bright: #ccffcc;
-  --text-dim: #3a4a3a;
-  --error: #ff4466;
-  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
-
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
+  color: var(--fg);
   font-family: var(--mono);
-  font-size: 13px;
-  padding: 0 16px 24px;
+  font-size: 14px;
+  padding: 32px 24px 96px;
+  max-width: 1100px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
-/* ── Light theme ─────────────────────────────────── */
-.app-root--light {
-  --bg: #f0f5f0;
-  --surface: #ffffff;
-  --surface-hi: #f8fbf8;
-  --border: rgba(0, 100, 50, 0.15);
-  --border-hi: rgba(0, 100, 50, 0.4);
-  --green: #006633;
-  --green-dim: rgba(0, 102, 51, 0.75);
-  --cyan: #007788;
-  --text: #2a4a2a;
-  --text-bright: #0a1a0a;
-  --text-dim: #7a9a7a;
-  --error: #cc0033;
-}
-
-/* ── Header ──────────────────────────────────────── */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 0 16px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
+  gap: 24px;
+  margin-bottom: 18px;
 }
 
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   flex-shrink: 0;
 }
 
-.app-brand-icon {
-  font-size: 22px;
-  color: var(--green);
-  filter: drop-shadow(0 0 6px var(--green));
+.app-brand-mark {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  background: var(--fg);
+  color: var(--bg);
+  border: var(--border-w) solid var(--line);
+}
+
+.app-brand-text {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1;
 }
 
-.app-brand-name {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  color: var(--green);
-  text-shadow: 0 0 20px rgba(0,255,136,0.4);
+.app-brand-text small {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
 }
 
-/* ── Nav tabs ────────────────────────────────────── */
-.app-nav {
+.app-tabs {
   display: flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  padding: 3px;
+  width: min(760px, 100%);
+  border: var(--border-w) solid var(--line);
+  background: var(--card);
+  margin-bottom: 22px;
 }
 
 .app-nav-tab {
-  padding: 5px 16px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
+  flex: 1;
+  padding: 14px 20px;
+  border-right: var(--border-w) solid var(--line);
   text-decoration: none;
-  transition: all 0.18s;
-  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 80ms;
+  position: relative;
+  text-align: left;
+}
+
+.app-nav-tab:last-child {
+  border-right: none;
+}
+
+.app-tab-num {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  opacity: 0.65;
+  margin-bottom: 2px;
 }
 
 .app-nav-tab:hover {
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .app-nav-tab--active {
-  background: rgba(0, 255, 136, 0.12);
-  border-color: var(--border-hi);
-  color: var(--green);
-  text-shadow: 0 0 12px rgba(0,255,136,0.5);
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
-/* ── Controls ────────────────────────────────────── */
 .app-header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
-.app-ctrl-btn {
-  width: 32px;
-  height: 32px;
+.app-pill {
+  min-width: 56px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--green);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: var(--border-w) solid var(--line);
+  background: var(--card);
+  color: var(--fg);
   cursor: pointer;
-  transition: all 0.18s;
+  transition: background 80ms;
   line-height: 1;
+  padding: 0 10px;
 }
 
-.app-ctrl-btn:hover {
-  background: rgba(0,255,136,0.08);
-  box-shadow: 0 0 12px rgba(0,255,136,0.2);
+.app-pill-live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
 }
 
-/* ── Responsive ──────────────────────────────────── */
+.app-pill:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.app-header-divider {
+  height: var(--border-w);
+  width: 100%;
+  background: var(--line);
+  margin-bottom: 18px;
+}
+
 @media (max-width: 768px) {
+  .app-root {
+    padding: 20px 14px 80px;
+  }
+
   .app-header {
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 16px;
   }
 
-  .app-brand-name {
-    font-size: 15px;
+  .app-brand-text {
+    font-size: 20px;
   }
 
-  .app-nav {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: center;
+  .app-tabs {
+    width: 100%;
+  }
+
+  .app-nav-tab {
+    padding: 12px 10px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header-right {
+    width: 100%;
+    flex-wrap: wrap;
   }
 }
 </style>

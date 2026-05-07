@@ -1,1130 +1,324 @@
 <template lang="pug">
-div.cp-content
+div.ummy
+  div.input-wrap
+    div.input-label
+      span ▸ {{ t('inputTitle') }}
+      span.detected(v-if="detectedLabel") ⊕ {{ detectedLabel }}
+      span.detected.miss(v-else-if="input.trim()") ? {{ t('unrecognized') }}
+      span.detected.miss(v-else) — {{ t('awaiting') }}
 
-  //- ── Hero single input ────────────────────────────────────
-  section.cp-hero
-    div.cp-clock-row
-      span.cp-clock {{ clockDisplay }}
-      button.cp-clock-btn(:title="t('clockCopyHint')" @click="copyCurrentTime")
-        i.mdi.mdi-content-copy
-      button.cp-clock-btn(:title="t('clockConvertHint')" @click="convertCurrentTime")
-        i.mdi.mdi-send
-    div.cp-hero-input-wrap
-      input.cp-hero-input.cp-mono(
-        v-model="heroInput"
-        :placeholder="singlePlaceholder"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        autocorrect="off"
-        @input="onHeroInput"
-      )
-      transition(name="toast")
-        span.cp-hero-copied(v-if="heroJustCopied") {{ t('copied') }}
-      button.cp-hero-history-btn(
-        v-if="history.length"
-        @click="openHistory"
-        :title="t('historyBtn')"
-      ) ⏱
-    div.cp-hero-output-wrap
-      pre.cp-hero-output.cp-mono(v-if="heroOutputText") {{ heroOutputText }}
-      span.cp-hint.cp-hero-hint(v-else-if="heroError" style="color: var(--error)") {{ heroError }}
-      span.cp-hint.cp-hero-hint(v-else) {{ t('hintSingle') }}
+    textarea.input-field(
+      v-if="bulk"
+      v-model="input"
+      rows="5"
+      spellcheck="false"
+      :placeholder="t('bulkPlaceholder')"
+    )
+    input.input-field(
+      v-else
+      v-model="input"
+      spellcheck="false"
+      autocomplete="off"
+      :placeholder="t('singlePlaceholder')"
+    )
 
-  //- ── Direction switcher ──────────────────────────────────
-  div.cp-dir-row
-    div.cp-dir-toggle
-      button(
-        :class="['cp-dir-opt', direction === 'to_human' && 'cp-dir-opt--active']"
-        @click="setDirection('to_human')"
-      ) {{ t('unixToHuman') }}
-      button.cp-dir-swap(@click="toggleDirection" :title="t('swapDir')") ⇄
-      button(
-        :class="['cp-dir-opt', direction === 'to_unix' && 'cp-dir-opt--active']"
-        @click="setDirection('to_unix')"
-      ) {{ t('humanToUnix') }}
+    div.input-actions
+      button(@click="setNow") {{ t('now') }}
+      button(@click="bulk = !bulk") {{ bulk ? t('singleMode') : t('bulkMode') }}
+      button(@click="input = ''") {{ t('clear') }}
+      button(@click="pasteInput") {{ t('paste') }}
 
-  //- ── Multi / batch section ────────────────────────────────
-  div.cp-multi-section
-    div.cp-panels
+  div.input-hint
+    span
+      | try:
+      a.sample(href="#" @click.prevent="input = '1714000000'") 1714000000
+      span.sep ·
+      a.sample(href="#" @click.prevent="input = '2026-04-26T12:34:56Z'") 2026-04-26T12:34:56Z
+      span.sep ·
+      a.sample(href="#" @click.prevent="input = '1714000000000'") 1714000000000
+    span.hint-keys / focus · ⌘K focus · ⌘↵ NOW · B bulk · 1/2 tabs
 
-      //- INPUT PANEL
-      section.cp-panel.cp-panel--input
-        div.cp-panel-header
-          span.cp-panel-title {{ t('multi') }}
+  table.bulk-table(v-if="bulk")
+    thead
+      tr
+        th #
+        th {{ t('inputCol') }}
+        th {{ t('detectedCol') }}
+        th {{ t('primaryCol') }}
+        th
+    tbody
+      tr(v-for="(row, idx) in bulkRows" :key="idx")
+        td {{ String(idx + 1).padStart(2, '0') }}
+        td.input-cell {{ row.input }}
+        td(:class="{ invalid: !row.detected }") {{ row.detected || '—' }}
+        td(:class="{ invalid: !row.detected }") {{ row.primary }}
+        td
+          button.result-copy(v-if="row.detected" @click="copy(row.primary)") ⧉
 
-        div.cp-panel-body
-          textarea.cp-textarea.cp-mono(
-            v-model="multiInput"
-            :placeholder="multiPlaceholder"
-            spellcheck="false"
-            @keydown.ctrl.enter="convertMulti"
-          )
+  div.results(v-else)
+    div.result(v-for="row in rows" :key="row.id" :class="{ featured: row.featured }")
+      div.result-label
+        span.name {{ row.name }}
+        span.desc {{ row.desc }}
+      div.result-value(:class="{ invalid: row.invalid }") {{ row.value }}
+      button.result-copy(:disabled="row.invalid" @click="copy(row.value)") {{ copiedValue === row.value ? '✓' : '⧉ COPY' }}
 
-          div.cp-panel-footer
-            span.cp-hint {{ t('hintMulti') }}
-            button.cp-action-btn(
-              :class="{ 'cp-action-btn--loading': loading }"
-              :disabled="loading"
-              @click="convertMulti"
-            )
-              span.cp-blink(v-if="loading") ···
-              span(v-else) ⚡ {{ t('convert') }}
+  div.section-head(@click="historyOpen = !historyOpen" :data-open="historyOpen ? '1' : '0'")
+    h2
+      span.chev ▾
+      span {{ t('recent') }}
+      span.count {{ history.length }}
+    div.section-actions
+      button(v-if="history.length" @click.stop="clearHistory") {{ t('clear') }}
 
-      //- Divider arrow
-      div.cp-arrow
-        span ›
-
-      //- OUTPUT PANEL
-      section.cp-panel.cp-panel--output
-        div.cp-panel-header
-          span.cp-panel-title {{ t('output') }}
-          div.cp-output-controls
-            button(
-              :class="['cp-tab', outputFormat === 'list' && 'cp-tab--active']"
-              @click="outputFormat = 'list'"
-            ) {{ t('list') }}
-            button(
-              :class="['cp-tab', outputFormat === 'dict' && 'cp-tab--active']"
-              @click="outputFormat = 'dict'"
-            ) {{ t('dict') }}
-            button.cp-copy-btn(
-              :class="{ 'cp-copy-btn--ok': justCopied }"
-              :disabled="!outputText"
-              @click="copyOutput"
-            ) {{ justCopied ? t('copied') : t('copy') }}
-
-        div.cp-panel-body
-          div.cp-output-state(v-if="loading")
-            span.cp-blink.cp-hint {{ t('processing') }}
-
-          div.cp-output-state.cp-error-msg(v-else-if="apiError") {{ apiError }}
-
-          pre.cp-output.cp-mono(
-            v-else-if="outputText"
-            :class="{ 'cp-output--has-errors': hasErrors }"
-          ) {{ outputText }}
-
-          div.cp-output-state(v-else)
-            span.cp-hint {{ t('emptyOutput') }}
-
-  //- ── Footer ───────────────────────────────────────────────
-  footer.cp-footer
-    span.cp-hint {{ t('footer') }}
-    div.cp-footer-links
-      a.cp-footer-link(href="/about.html" target="_blank") {{ t('about') }}
-      span.cp-footer-sep ·
-      a.cp-footer-link(href="/license.txt" target="_blank") {{ t('license') }}
-
-  //- Copy toast
-  transition(name="toast")
-    div.cp-toast(v-if="justCopied") {{ t('toastCopied') }}
-
-  //- ── History overlay ──────────────────────────────────────
-  transition(name="overlay")
-    .cp-history-overlay(v-if="historyOpen" @click.self="historyOpen = false")
-      .cp-history-panel
-        .cp-history-header
-          .cp-history-tabs
-            button(
-              :class="['cp-history-tab', historyTab === 'to_human' && 'cp-history-tab--active']"
-              @click="historyTab = 'to_human'"
-            ) {{ t('unixToHuman') }}
-            button(
-              :class="['cp-history-tab', historyTab === 'to_unix' && 'cp-history-tab--active']"
-              @click="historyTab = 'to_unix'"
-            ) {{ t('humanToUnix') }}
-          button.cp-history-close(@click="historyOpen = false") ✕
-        .cp-history-list
-          .cp-history-empty(v-if="!historyByTab.length")
-            span.cp-hint {{ t('historyEmpty') }}
-          .cp-history-item(
-            v-else
-            v-for="(entry, i) in historyByTab"
-            :key="i"
-            @click="applyHistory(entry)"
-          )
-            span.cp-history-in {{ entry.input }}
-            span.cp-history-arrow →
-            span.cp-history-out {{ entry.output }}
+  div.history-wrap(:data-open="historyOpen ? '1' : '0'")
+    div
+      div.empty(v-if="!history.length") {{ t('historyEmpty') }}
+      div.history(v-else)
+        div.history-row(v-for="(entry, idx) in history.slice(0, 8)" :key="idx" @click="input = entry.input")
+          span.type {{ entry.detected }}
+          span.val {{ entry.input }}
+          span.time {{ timeAgo(entry.ts) }}
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { convertTimestamps, type TsDirection, type TsConversionResult } from '../api/timestamp'
+import { computed, ref, watch } from 'vue'
 import { useSettings } from '../composables/useSettings'
 
-// ── i18n ────────────────────────────────────────────────────
+const { lang } = useSettings()
 type Lang = 'en' | 'ru'
 
-const translations = {
+const tr = {
   en: {
-    unixToHuman: 'UNIX → HUMAN',
-    humanToUnix: 'HUMAN → UNIX',
-    swapDir:     'Swap direction',
-    output:      'OUTPUT',
-    multi:       'MULTI',
-    list:        'LIST',
-    dict:        'DICT',
-    copy:        'COPY',
-    copied:      '✓ COPIED',
-    convert:     'CONVERT',
-    processing:  'processing...',
-    clockCopyHint:    'Copy current time to clipboard',
-    clockConvertHint: 'Use as input & convert',
-    hintSingle:  'converts live · unix timestamp or DD.MM.YYYY HH:mm:ss',
-    hintMulti:   'one value per line (or comma-separated) · Ctrl+Enter to convert',
-    emptyOutput: '// output will appear here',
-    footer:      'unix seconds · milliseconds auto-detected · DD.MM.YYYY HH:mm:ss UTC',
-    toastCopied: 'Copied to clipboard!',
-    about:       'About',
-    license:     'MIT License',
-    historyBtn:  'Recent conversions',
-    historyEmpty:'No conversions yet',
+    inputTitle: 'INPUT · PASTE ANYTHING',
+    awaiting: 'AWAITING INPUT',
+    unrecognized: 'UNRECOGNIZED',
+    singlePlaceholder: 'Paste a timestamp · 1714000000 · 2026-04-26T12:34:56Z · ...',
+    bulkPlaceholder: 'One value per line...',
+    now: '⌘ NOW',
+    bulkMode: '≡ BULK MODE',
+    singleMode: '× SINGLE MODE',
+    clear: '⌫ CLEAR',
+    paste: '⤓ PASTE',
+    inputCol: 'Input',
+    detectedCol: 'Detected',
+    primaryCol: 'Primary output',
+    recent: 'Recent',
+    historyEmpty: 'No history yet. Conversions you make will appear here.',
   },
   ru: {
-    unixToHuman: 'UNIX → ДАТА',
-    humanToUnix: 'ДАТА → UNIX',
-    swapDir:     'Сменить направление',
-    output:      'ВЫВОД',
-    multi:       'МНОГО',
-    list:        'СПИСОК',
-    dict:        'СЛОВАРЬ',
-    copy:        'КОПИРОВАТЬ',
-    copied:      '✓ СКОПИРОВАНО',
-    convert:     'КОНВЕРТИРОВАТЬ',
-    processing:  'обработка...',
-    clockCopyHint:    'Скопировать текущее время',
-    clockConvertHint: 'Использовать как вход и конвертировать',
-    hintSingle:  'конвертирует автоматически · unix timestamp или ДД.ММ.ГГГГ ЧЧ:мм:сс',
-    hintMulti:   'по одному значению в строке, или разделенные запятой · Ctrl+Enter',
-    emptyOutput: '// результат появится здесь',
-    footer:      'unix секунды · миллисекунды определяются автоматически · ДД.ММ.ГГГГ ЧЧ:мм:сс UTC',
-    toastCopied: 'Скопировано!',
-    about:       'О сервисе',
-    license:     'Лицензия MIT',
-    historyBtn:  'Недавние конвертации',
-    historyEmpty:'Конвертаций пока нет',
+    inputTitle: 'ВВОД · ВСТАВЬТЕ ЧТО-НИБУДЬ',
+    awaiting: 'ОЖИДАНИЕ ВВОДА',
+    unrecognized: 'НЕ РАСПОЗНАНО',
+    singlePlaceholder: 'Вставьте timestamp · 1714000000 · 2026-04-26T12:34:56Z · ...',
+    bulkPlaceholder: 'По одному значению на строку...',
+    now: '⌘ NOW',
+    bulkMode: '≡ МНОГО',
+    singleMode: '× ОДИН',
+    clear: '⌫ ОЧИСТИТЬ',
+    paste: '⤓ ВСТАВИТЬ',
+    inputCol: 'Ввод',
+    detectedCol: 'Тип',
+    primaryCol: 'Основной результат',
+    recent: 'Недавние',
+    historyEmpty: 'История пока пуста.',
   },
 } as const
 
-type TKey = keyof typeof translations.en
-
-const { lang } = useSettings()
-
-function t(key: TKey): string {
-  return translations[lang.value as Lang][key]
+function t(k: keyof typeof tr.en) {
+  return tr[lang.value as Lang][k]
 }
 
-// ── State ──────────────────────────────────────────────────
-const direction = ref<TsDirection>('to_human')
-
-// ── Live clock ─────────────────────────────────────────────
-const clockTick = ref(0)
-
-const clockDisplay = computed(() => {
-  clockTick.value
-  const now = new Date()
-  if (direction.value === 'to_human') {
-    return Math.floor(Date.now() / 1000).toString()
-  }
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(now.getUTCDate())}.${pad(now.getUTCMonth() + 1)}.${now.getUTCFullYear()} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`
-})
-
-let clockInterval: ReturnType<typeof setInterval>
-
-onMounted(() => {
-  clockInterval = setInterval(() => { clockTick.value++ }, 1000)
-})
-
-onUnmounted(() => {
-  clearInterval(clockInterval)
-})
-
-async function copyCurrentTime() {
-  const text = clockDisplay.value
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-  }
-}
-
-function convertCurrentTime() {
-  heroInput.value = clockDisplay.value
-  heroRunConversion(clockDisplay.value)
-}
-
-// Hero (single)
-const heroInput = ref('')
-const heroResult = ref<TsConversionResult | null>(null)
-const heroError = ref('')
-const heroJustCopied = ref(false)
-const historyOpen = ref(false)
-const historyTab = ref<TsDirection>('to_human')
-const history = ref<Array<{ input: string; output: string; direction: TsDirection }>>(
-  JSON.parse(localStorage.getItem('ts_history') || '[]')
-)
-const historyByTab = computed(() => history.value.filter(h => h.direction === historyTab.value))
-
-function openHistory() {
-  historyTab.value = direction.value
-  historyOpen.value = true
-}
-
-// Multi / batch
-const multiInput = ref('')
-const outputFormat = ref<'list' | 'dict'>('list')
-const results = ref<TsConversionResult[]>([])
-const loading = ref(false)
-const apiError = ref('')
-const justCopied = ref(false)
-
-// ── Placeholders ───────────────────────────────────────────
-const singlePlaceholder = computed(() =>
-  direction.value === 'to_human'
-    ? '1700000000  or  1700000000000 (ms)'
-    : '15.11.2023 21:53:20  or  15.11.2023 21:53:20 UTC'
+type Row = { id: string; name: string; desc: string; value: string; invalid?: boolean; featured?: boolean }
+const input = ref('')
+const bulk = ref(false)
+const copiedValue = ref('')
+const historyOpen = ref(true)
+const history = ref<Array<{ input: string; detected: string; ts: number }>>(
+  JSON.parse(localStorage.getItem('ummy.ts.history') || '[]'),
 )
 
-const multiPlaceholder = computed(() =>
-  direction.value === 'to_human'
-    ? '1700000000\n1700000000000\n1699920000'
-    : '15.11.2023 21:53:20 UTC\n01.01.2024 00:00:00\n31.12.2023 23:59:59'
-)
-
-// ── Hero output ────────────────────────────────────────────
-const heroOutputText = computed(() => {
-  if (!heroResult.value || heroResult.value.type === 'error') return ''
-  return heroResult.value.output
-})
-
-// ── Multi output formatting ────────────────────────────────
-const hasErrors = computed(() => results.value.some(r => r.type === 'error'))
-
-const outputText = computed(() => {
-  if (!results.value.length) return ''
-
-  if (outputFormat.value === 'list') {
-    return results.value
-      .map(r => r.type === 'error' ? `# ERROR: ${r.error}` : r.output)
-      .join('\n')
-  }
-
-  const dict: Record<string, string> = {}
-  for (const r of results.value) {
-    dict[r.input] = r.type === 'error' ? `ERROR: ${r.error}` : r.output
-  }
-  return JSON.stringify(dict, null, 2)
-})
-
-// ── Debounce helper ────────────────────────────────────────
-function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
-  let timer: ReturnType<typeof setTimeout>
-  return ((...args: unknown[]) => {
-    clearTimeout(timer)
-    timer = setTimeout(() => fn(...args), ms)
-  }) as T
+const detectLabels: Record<string, string> = {
+  'unix-s': 'UNIX seconds',
+  'unix-ms': 'UNIX millis',
+  'unix-us': 'UNIX micros',
+  'unix-ns': 'UNIX nanos',
+  iso: 'ISO 8601 date',
 }
 
-// ── Hero conversion (auto-copy on success) ─────────────────
-async function heroRunConversion(value: string) {
-  if (!value) {
-    heroResult.value = null
-    heroError.value = ''
-    return
+function detectTimestamp(raw: string): { kind: string | null; value?: number } {
+  const s = raw.trim()
+  if (!s) return { kind: null }
+  if (/^-?\d+$/.test(s)) {
+    const n = Number(s)
+    if (s.length <= 10) return { kind: 'unix-s', value: n }
+    if (s.length <= 13) return { kind: 'unix-ms', value: n }
+    if (s.length <= 16) return { kind: 'unix-us', value: n }
+    return { kind: 'unix-ns', value: n }
   }
-  try {
-    const resp = await convertTimestamps({ direction: direction.value, values: [value] })
-    const r = resp.results[0]
-    heroResult.value = r
-    heroError.value = ''
-    if (r && r.type !== 'error') {
-      try {
-        await navigator.clipboard.writeText(r.output)
-      } catch {
-        const ta = document.createElement('textarea')
-        ta.value = r.output
-        document.body.appendChild(ta)
-        ta.select()
-        document.execCommand('copy')
-        document.body.removeChild(ta)
-      }
-      heroJustCopied.value = true
-      setTimeout(() => { heroJustCopied.value = false }, 2000)
-      const dir = direction.value
-      const sameDir = [
-        { input: value, output: r.output, direction: dir },
-        ...history.value.filter(h => h.direction === dir && h.input !== value),
-      ].slice(0, 5)
-      const otherDir = history.value.filter(h => h.direction !== dir)
-      history.value = [...sameDir, ...otherDir]
-      localStorage.setItem('ts_history', JSON.stringify(history.value))
+  const d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return { kind: 'iso', value: d.getTime() }
+  return { kind: null }
+}
+
+function relativeTime(ms: number): string {
+  const diff = ms - Date.now()
+  const abs = Math.abs(diff)
+  const sec = abs / 1000
+  const past = diff < 0
+  const fmt = (n: number, u: string) => `${Math.round(n)} ${u}${n >= 2 ? 's' : ''} ${past ? 'ago' : 'from now'}`
+  if (sec < 60) return fmt(sec, 'second')
+  if (sec < 3600) return fmt(sec / 60, 'minute')
+  if (sec < 86400) return fmt(sec / 3600, 'hour')
+  return fmt(sec / 86400, 'day')
+}
+
+function rowsFor(value: string): { detected: string | null; rows: Row[] } {
+  const det = detectTimestamp(value)
+  if (!det.kind || det.value == null) {
+    const empty = '—'
+    return {
+      detected: null,
+      rows: [
+        { id: 'unix-s', name: 'UNIX seconds', desc: 'Epoch · 10 digits', value: empty, invalid: true },
+        { id: 'unix-ms', name: 'UNIX millis', desc: 'Epoch · 13 digits', value: empty, invalid: true },
+        { id: 'iso', name: 'ISO 8601', desc: 'UTC · RFC 3339', value: empty, invalid: true },
+        { id: 'local', name: 'Local', desc: 'System TZ', value: empty, invalid: true },
+        { id: 'human', name: 'Human', desc: 'Locale formatted', value: empty, invalid: true },
+        { id: 'rel', name: 'Relative', desc: 'From now', value: empty, invalid: true },
+        { id: 'rfc2822', name: 'RFC 2822', desc: 'Email / HTTP', value: empty, invalid: true },
+        { id: 'hex', name: 'Hex (ms)', desc: 'Base 16', value: empty, invalid: true },
+      ],
     }
-  } catch (e: unknown) {
-    heroError.value = e instanceof Error ? e.message : 'Unknown error'
-    heroResult.value = null
+  }
+
+  let ms = det.value
+  if (det.kind === 'unix-s') ms = det.value * 1000
+  else if (det.kind === 'unix-us') ms = Math.floor(det.value / 1000)
+  else if (det.kind === 'unix-ns') ms = Math.floor(det.value / 1e6)
+  const d = new Date(ms)
+  const tzOffsetMin = -d.getTimezoneOffset()
+  const sign = tzOffsetMin >= 0 ? '+' : '-'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const tz = `UTC${sign}${pad(Math.floor(Math.abs(tzOffsetMin) / 60))}:${pad(Math.abs(tzOffsetMin) % 60)}`
+  const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  const human = d.toLocaleString()
+
+  return {
+    detected: detectLabels[det.kind],
+    rows: [
+      { id: 'unix-s', name: 'UNIX seconds', desc: 'Epoch · 10 digits', value: String(Math.floor(ms / 1000)), featured: det.kind === 'unix-s' },
+      { id: 'unix-ms', name: 'UNIX millis', desc: 'Epoch · 13 digits', value: String(ms), featured: det.kind === 'unix-ms' || det.kind === 'iso' },
+      { id: 'iso', name: 'ISO 8601', desc: 'UTC · RFC 3339', value: d.toISOString(), featured: det.kind === 'iso' },
+      { id: 'local', name: 'Local', desc: tz, value: local },
+      { id: 'human', name: 'Human', desc: 'Locale formatted', value: human },
+      { id: 'rel', name: 'Relative', desc: 'From now', value: relativeTime(ms) },
+      { id: 'rfc2822', name: 'RFC 2822', desc: 'Email / HTTP', value: d.toUTCString() },
+      { id: 'hex', name: 'Hex (ms)', desc: 'Base 16', value: `0x${ms.toString(16).toUpperCase()}` },
+    ],
   }
 }
 
-const debouncedHero = debounce(() => {
-  heroRunConversion(heroInput.value.trim())
-}, 350)
+const current = computed(() => rowsFor(input.value))
+const rows = computed(() => current.value.rows)
+const detectedLabel = computed(() => current.value.detected)
+const bulkRows = computed(() =>
+  input.value.split('\n').map(v => v.trim()).filter(Boolean).map((line) => {
+    const r = rowsFor(line)
+    const primary = r.rows.find(x => x.featured) || r.rows[0]
+    return { input: line, detected: r.detected, primary: primary.value }
+  }),
+)
 
-function onHeroInput() {
-  debouncedHero()
+watch(input, (val) => {
+  if (!val.trim()) return
+  if (!detectedLabel.value) return
+  history.value = [{ input: val, detected: detectedLabel.value, ts: Date.now() }, ...history.value.filter(h => h.input !== val)].slice(0, 30)
+  localStorage.setItem('ummy.ts.history', JSON.stringify(history.value))
+})
+
+function setNow() {
+  input.value = String(Date.now())
 }
 
-function applyHistory(entry: { input: string; output: string; direction: TsDirection }) {
-  historyOpen.value = false
-  direction.value = entry.direction
-  heroInput.value = entry.input
-  heroRunConversion(entry.input)
+async function copy(value: string) {
+  if (!value || value === '—') return
+  await navigator.clipboard.writeText(value)
+  copiedValue.value = value
+  setTimeout(() => { copiedValue.value = '' }, 900)
 }
 
-// ── Multi conversion ───────────────────────────────────────
-async function runConversion(values: string[]) {
-  if (!values.length) {
-    results.value = []
-    apiError.value = ''
-    return
-  }
-  loading.value = true
-  apiError.value = ''
-  try {
-    const resp = await convertTimestamps({ direction: direction.value, values })
-    results.value = resp.results
-  } catch (e: unknown) {
-    apiError.value = e instanceof Error ? e.message : 'Unknown error'
-    results.value = []
-  } finally {
-    loading.value = false
-  }
+async function pasteInput() {
+  try { input.value = await navigator.clipboard.readText() } catch {}
 }
 
-function splitMultiValues(raw: string): string[] {
-  return raw.split(/[\n,]/).map(s => s.trim()).filter(s => s.length > 0)
+function clearHistory() {
+  history.value = []
+  localStorage.removeItem('ummy.ts.history')
 }
 
-function convertMulti() {
-  runConversion(splitMultiValues(multiInput.value))
-}
-
-// ── Direction switching ────────────────────────────────────
-function toggleDirection() {
-  setDirection(direction.value === 'to_human' ? 'to_unix' : 'to_human')
-}
-
-function setDirection(dir: TsDirection) {
-  direction.value = dir
-  heroInput.value = ''
-  heroResult.value = null
-  heroError.value = ''
-  multiInput.value = ''
-  results.value = []
-  apiError.value = ''
-}
-
-// ── Clipboard (multi panel) ────────────────────────────────
-async function copyOutput() {
-  if (!outputText.value) return
-  try {
-    await navigator.clipboard.writeText(outputText.value)
-    justCopied.value = true
-    setTimeout(() => { justCopied.value = false }, 2000)
-  } catch {
-    const ta = document.createElement('textarea')
-    ta.value = outputText.value
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    justCopied.value = true
-    setTimeout(() => { justCopied.value = false }, 2000)
-  }
+function timeAgo(ts: number): string {
+  const s = (Date.now() - ts) / 1000
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
 }
 </script>
 
 <style scoped>
-/* ── Dir row ─────────────────────────────────────── */
-.cp-dir-row {
-  display: flex;
-  justify-content: center;
-  margin: 0 0 24px;
-}
-
-.cp-dir-toggle {
-  display: flex;
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  padding: 3px;
-  gap: 2px;
-}
-
-.cp-dir-opt {
-  padding: 6px 14px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.18s;
-  white-space: nowrap;
-}
-
-.cp-dir-opt:hover {
-  color: var(--text);
-}
-
-.cp-dir-opt--active {
-  background: rgba(0, 255, 136, 0.12);
-  border-color: var(--border-hi);
-  color: var(--green);
-  text-shadow: 0 0 12px rgba(0,255,136,0.5);
-}
-
-.cp-dir-swap {
-  padding: 4px 8px;
-  font-size: 16px;
-  font-family: var(--mono);
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-  line-height: 1;
-}
-
-.cp-dir-swap:hover {
-  color: var(--green);
-  text-shadow: 0 0 10px rgba(0,255,136,0.6);
-}
-
-/* ── Hero section ────────────────────────────────── */
-.cp-hero {
-  margin-bottom: 20px;
-  padding: 24px 28px;
-  background: var(--surface);
-  border: 1px solid var(--border-hi);
-  border-radius: 8px;
-  box-shadow: 0 0 40px rgba(0,255,136,0.04), inset 0 0 60px rgba(0,255,136,0.015);
-}
-
-.cp-hero-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.cp-hero-input {
-  flex: 1;
-  padding: 14px 18px;
-  font-size: 20px;
-  background: var(--surface-hi);
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  color: var(--text-bright);
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  caret-color: var(--green);
-}
-
-.cp-hero-input::placeholder {
-  color: var(--text-dim);
-  font-size: 13px;
-}
-
-.cp-hero-input:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 2px rgba(0,255,136,0.12), inset 0 0 30px rgba(0,255,136,0.03);
-}
-
-.cp-hero-copied {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--green);
-  text-shadow: 0 0 10px rgba(0,255,136,0.5);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.cp-hero-output-wrap {
-  margin-top: 14px;
-  min-height: 28px;
-  display: flex;
-  align-items: baseline;
-}
-
-.cp-hero-output {
-  margin: 0;
-  padding: 0;
-  font-size: 18px;
-  line-height: 1.5;
-  color: var(--green);
-  text-shadow: 0 0 20px rgba(0,255,136,0.35);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.cp-hero-hint {
-  font-size: 12px;
-}
-
-/* ── Multi section ───────────────────────────────── */
-.cp-multi-section {
-  border-top: 1px solid var(--border);
-  padding-top: 24px;
-}
-
-/* ── Panels layout ───────────────────────────────── */
-.cp-panels {
-  display: flex;
-  gap: 0;
-  flex: 1;
-  align-items: stretch;
-}
-
-.cp-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-  transition: border-color 0.2s;
-}
-
-.cp-panel:focus-within {
-  border-color: var(--border-hi);
-}
-
-.cp-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  font-size: 28px;
-  color: var(--text-dim);
-  flex-shrink: 0;
-  user-select: none;
-}
-
-/* ── Panel sections ──────────────────────────────── */
-.cp-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(0,255,136,0.03);
-  flex-shrink: 0;
-}
-
-.cp-panel-title {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--green-dim);
-}
-
-.cp-panel-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-}
-
-.cp-panel-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-
-/* ── Tabs ────────────────────────────────────────── */
-.cp-output-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.cp-tab {
-  padding: 3px 10px;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.cp-tab:hover {
-  border-color: var(--border-hi);
-  color: var(--text);
-}
-
-.cp-tab--active {
-  background: rgba(0,255,136,0.1);
-  border-color: var(--border-hi);
-  color: var(--green);
-}
-
-/* ── Input fields ────────────────────────────────── */
-.cp-mono {
-  font-family: var(--mono) !important;
-}
-
-.cp-textarea {
-  flex: 1;
-  width: 100%;
-  min-height: 200px;
-  padding: 10px 12px;
-  font-size: 13px;
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-bright);
-  outline: none;
-  resize: vertical;
-  line-height: 1.7;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  caret-color: var(--green);
-}
-
-.cp-textarea::placeholder {
-  color: var(--text-dim);
-}
-
-.cp-textarea:focus {
-  border-color: var(--border-hi);
-  box-shadow: 0 0 0 1px rgba(0,255,136,0.12), inset 0 0 20px rgba(0,255,136,0.03);
-}
-
-/* ── Hints ───────────────────────────────────────── */
-.cp-hint {
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
-}
-
-/* ── Action button ───────────────────────────────── */
-.cp-action-btn {
-  padding: 5px 14px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  background: rgba(0,255,136,0.08);
-  border: 1px solid var(--green-dim);
-  border-radius: 4px;
-  color: var(--green);
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-
-.cp-action-btn:hover:not(:disabled) {
-  background: rgba(0,255,136,0.15);
-  box-shadow: 0 0 14px rgba(0,255,136,0.25);
-}
-
-.cp-action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── Copy button ─────────────────────────────────── */
-.cp-copy-btn {
-  padding: 3px 10px;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.cp-copy-btn:hover:not(:disabled) {
-  border-color: var(--border-hi);
-  color: var(--text);
-}
-
-.cp-copy-btn--ok {
-  border-color: var(--green) !important;
-  color: var(--green) !important;
-}
-
-.cp-copy-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* ── Output ──────────────────────────────────────── */
-.cp-output-state {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 120px;
-}
-
-.cp-output {
-  flex: 1;
-  width: 100%;
-  padding: 0;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--green);
-  white-space: pre-wrap;
-  word-break: break-all;
-  text-shadow: 0 0 10px rgba(0,255,136,0.2);
-  overflow-y: auto;
-}
-
-.cp-error-msg {
-  color: var(--error);
-  font-size: 12px;
-  text-align: center;
-}
-
-/* ── Blink animation ─────────────────────────────── */
-.cp-blink {
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* ── Footer ──────────────────────────────────────── */
-.cp-footer {
-  padding: 16px 0 0;
-  text-align: center;
-  border-top: 1px solid var(--border);
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.cp-footer-links {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cp-footer-link {
-  font-size: 11px;
-  color: var(--text-dim);
-  text-decoration: none;
-  letter-spacing: 0.05em;
-  transition: color 0.15s;
-}
-
-.cp-footer-link:hover {
-  color: var(--green);
-}
-
-.cp-footer-sep {
-  color: var(--text-dim);
-  font-size: 11px;
-}
-
-/* ── Toast ───────────────────────────────────────── */
-.cp-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: rgba(0,255,136,0.12);
-  border: 1px solid var(--green-dim);
-  color: var(--green);
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  pointer-events: none;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-/* ── History button ──────────────────────────────────────── */
-.cp-hero-history-btn {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  background: transparent;
-  border: 1px solid var(--border-hi);
-  border-radius: 6px;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.18s;
-  line-height: 1;
-}
-
-.cp-hero-history-btn:hover {
-  color: var(--green);
-  border-color: var(--green);
-  box-shadow: 0 0 10px rgba(0,255,136,0.2);
-}
-
-/* ── History overlay ─────────────────────────────────────── */
-.cp-history-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.cp-history-panel {
-  background: var(--surface);
-  border: 1px solid var(--border-hi);
-  border-radius: 8px;
-  box-shadow: 0 0 60px rgba(0,255,136,0.08);
-  width: min(560px, calc(100vw - 32px));
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.cp-history-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(0,255,136,0.03);
-  flex-shrink: 0;
-}
-
-.cp-history-tabs {
-  display: flex;
-  gap: 4px;
-}
-
-.cp-history-tab {
-  padding: 4px 12px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.cp-history-tab:hover {
-  border-color: var(--border-hi);
-  color: var(--text);
-}
-
-.cp-history-tab--active {
-  background: rgba(0, 255, 136, 0.1);
-  border-color: var(--border-hi);
-  color: var(--green);
-}
-
-.cp-history-close {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-  line-height: 1;
-}
-
-.cp-history-close:hover {
-  color: var(--green);
-  border-color: var(--border-hi);
-}
-
-.cp-history-list {
-  overflow-y: auto;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 60px;
-}
-
-.cp-history-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.cp-history-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: var(--mono);
-  font-size: 13px;
-  overflow: hidden;
-}
-
-.cp-history-item:hover {
-  border-color: var(--border-hi);
-  background: rgba(0,255,136,0.05);
-}
-
-.cp-history-in {
-  color: var(--text-bright);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.cp-history-arrow {
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.cp-history-out {
-  color: var(--green);
-  text-shadow: 0 0 10px rgba(0,255,136,0.25);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  text-align: right;
-}
-
-/* ── Overlay transition ──────────────────────────────────── */
-.overlay-enter-active,
-.overlay-leave-active {
-  transition: opacity 0.2s;
-}
-
-.overlay-enter-from,
-.overlay-leave-to {
-  opacity: 0;
-}
-
-/* ── Live clock row ──────────────────────────────── */
-.cp-clock-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.cp-clock {
-  font-family: var(--mono);
-  font-size: 24px;
-  color: var(--text);
-  letter-spacing: 0.05em;
-  user-select: none;
-}
-
-.cp-clock-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-  line-height: 1;
-  flex-shrink: 0;
-  padding: 0;
-}
-
-.cp-clock-btn:hover {
-  color: var(--green);
-  border-color: var(--border-hi);
-  box-shadow: 0 0 8px rgba(0,255,136,0.15);
-}
-
-/* ── Responsive ──────────────────────────────────── */
-@media (max-width: 768px) {
-  .cp-panels {
-    flex-direction: column;
-  }
-
-  .cp-arrow {
-    padding: 8px 0;
-    rotate: 90deg;
-    font-size: 22px;
-  }
-
-  .cp-dir-opt {
-    padding: 5px 10px;
-    font-size: 10px;
-  }
-
-  .cp-hero-input {
-    font-size: 15px;
-    padding: 12px 14px;
-  }
-
-  .cp-hero-output {
-    font-size: 14px;
-  }
+.ummy { color: var(--fg); }
+.input-wrap { border: var(--border-w) solid var(--line); background: var(--card); box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow-color); margin-bottom: 8px; }
+.input-label { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: var(--border-w) solid var(--line); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; background: var(--fg); color: var(--bg); }
+.detected { background: var(--accent); color: var(--accent-fg); padding: 3px 8px; font-size: 10px; }
+.detected.miss { background: transparent; color: var(--bg); border: 1px solid var(--bg); }
+.input-field { width: 100%; border: none; background: transparent; color: var(--fg); font-family: var(--mono); font-size: 34px; padding: 16px 16px; outline: none; resize: none; line-height: 1.25; letter-spacing: .01em; }
+.input-actions { display: flex; border-top: var(--border-w) solid var(--line); }
+.input-actions button { flex: 1; background: transparent; border: none; border-right: var(--border-w) solid var(--line); padding: 9px 12px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--fg); cursor: pointer; }
+.input-actions button:last-child { border-right: none; }
+.input-actions button:hover { background: var(--accent); color: var(--accent-fg); }
+.input-hint { font-size: 10px; color: var(--muted); margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; letter-spacing: .04em; }
+.sample { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; margin-left: 6px; }
+.sep { color: var(--muted); margin: 0 4px; }
+.hint-keys { text-transform: lowercase; }
+.results { display: grid; gap: var(--gap); }
+.result { border: var(--border-w) solid var(--line); background: var(--card); display: grid; grid-template-columns: 166px 1fr auto; }
+.result-label { background: var(--bg); border-right: var(--border-w) solid var(--line); padding: var(--pad); display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.name { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.desc { font-size: 10px; color: var(--muted); }
+.result-value { padding: var(--pad); font-size: 15px; display: flex; align-items: center; user-select: all; word-break: break-all; }
+.result-value.invalid { color: var(--muted); font-style: italic; }
+.result-copy { border: none; border-left: var(--border-w) solid var(--line); padding: 0 16px; font-size: 11px; font-weight: 600; letter-spacing: .1em; background: transparent; color: var(--fg); cursor: pointer; text-transform: uppercase; }
+.result-copy:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); }
+.result-copy:disabled { opacity: .45; cursor: not-allowed; }
+.featured { border-color: var(--accent); position: relative; }
+.featured::before { content: 'PRIMARY'; position: absolute; top: -2px; left: -2px; background: var(--accent); color: var(--accent-fg); font-size: 9px; letter-spacing: .15em; font-weight: 700; padding: 3px 8px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; margin: 34px 0 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); cursor: pointer; }
+.section-head h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
+.chev { display: inline-block; width: 14px; font-size: 12px; color: var(--muted); transition: transform 160ms; }
+.section-head[data-open='0'] .chev { transform: rotate(-90deg); }
+.count { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; }
+.section-actions button { border: 1px solid var(--line); background: transparent; padding: 4px 10px; font-size: 10px; text-transform: uppercase; cursor: pointer; color: var(--fg); }
+.section-actions button:hover { background: var(--accent); color: var(--accent-fg); }
+.history-wrap { display: grid; grid-template-rows: 1fr; overflow: hidden; transition: grid-template-rows .2s, opacity .2s; }
+.history-wrap[data-open='0'] { grid-template-rows: 0fr; opacity: 0; }
+.history-wrap > div { min-height: 0; }
+.history { display: grid; gap: 6px; }
+.history-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 12px; padding: 7px 12px; border: 1px solid var(--line); background: var(--card); font-size: 12px; align-items: center; cursor: pointer; }
+.history-row:hover { background: color-mix(in srgb, var(--accent) 15%, var(--card)); }
+.type { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+.val { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.time { font-size: 10px; color: var(--muted); }
+.empty { padding: 20px; border: 1px dashed var(--line); background: var(--card); text-align: center; color: var(--muted); font-size: 12px; }
+.bulk-table { width: 100%; border-collapse: collapse; border: var(--border-w) solid var(--line); background: var(--card); font-size: 13px; }
+.bulk-table th,.bulk-table td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+.bulk-table th { background: var(--fg); color: var(--bg); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.input-cell { font-weight: 600; }
+.invalid { color: var(--muted); font-style: italic; }
+@media (max-width: 720px) {
+  .input-field { font-size: 24px; }
+  .result { grid-template-columns: 1fr; }
+  .result-label { border-right: none; border-bottom: var(--border-w) solid var(--line); }
+  .result-copy { border-left: none; border-top: var(--border-w) solid var(--line); padding: 10px; }
 }
 </style>
